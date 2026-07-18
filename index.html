@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Realbook</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#14202c">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Realbook">
+<style>
+  :root{
+    --bg:#0f1720; --panel:#17222e; --panel2:#1e2b39; --line:#2b3b4d;
+    --ink:#eef3f8; --sub:#9db0c2; --accent:#4aa3ff; --accent2:#2b7de0;
+    --star:#ffc94a; --prac:#57c98b; --danger:#ff6b6b;
+    --radius:12px; --tap:46px; --fs:17px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);
+    font:var(--fs)/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-text-size-adjust:100%;}
+
+  #topbar{position:sticky;top:0;z-index:20;background:var(--bg)}
+  header{background:linear-gradient(180deg,#1b2836,#14202c);
+    border-bottom:1px solid #33475c;box-shadow:0 6px 18px rgba(0,0,0,.45);
+    padding:12px 16px 0;padding-top:calc(12px + env(safe-area-inset-top));}
+  .brand{display:flex;align-items:center;gap:12px;cursor:pointer;user-select:none;width:max-content}
+  .logo{width:40px;height:40px;border-radius:11px;flex:none;display:block;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+  .brand .word{font-size:22px;font-weight:800;letter-spacing:.3px}
+  .brand .word b{color:var(--accent)}
+  .brand .count{color:var(--sub);font-size:13px;font-weight:500;margin-top:2px}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-bottom:12px}
+  .tab{background:var(--panel2);color:var(--sub);border:1px solid var(--line);
+    padding:9px 15px;border-radius:999px;font-size:14.5px;cursor:pointer;
+    min-height:38px;display:flex;align-items:center;gap:7px;user-select:none;font-weight:600;}
+  .tab.active{background:var(--accent2);color:#fff;border-color:var(--accent2)}
+  .tab.tagtab{border-style:dashed}
+  .tab.tagtab.active{border-style:solid}
+  .tab .badge{background:rgba(255,255,255,.18);border-radius:999px;padding:0 7px;font-size:12px}
+  .tab .dot{width:9px;height:9px;border-radius:50%}
+
+  .controls{padding:12px 16px 10px;display:flex;flex-direction:column;gap:9px;background:var(--bg);
+    box-shadow:0 8px 14px -8px rgba(0,0,0,.6);border-bottom:1px solid #23313f}
+  input[type=search],input.txt,select{background:var(--panel);border:1px solid var(--line);color:var(--ink);
+    border-radius:11px;padding:12px 14px;font-size:var(--fs);width:100%;min-height:var(--tap);}
+  input::placeholder{color:#7c90a4}
+  .lbl{color:var(--sub);font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin:2px 2px -2px}
+  .chiprow{display:flex;gap:7px;flex-wrap:wrap}
+  .chiprow.scroll{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+  .fchip{background:var(--panel2);border:1px solid var(--line);color:var(--sub);border-radius:999px;
+    padding:7px 13px;font-size:14px;cursor:pointer;user-select:none;white-space:nowrap;min-height:36px;
+    display:flex;align-items:center;gap:6px;font-weight:600}
+  .fchip.active{background:var(--accent2);border-color:var(--accent2);color:#fff}
+  .azchip{min-width:34px;justify-content:center;padding:7px 8px}
+  .filters{display:flex;gap:10px;flex-wrap:wrap}
+  .filters>*{flex:1;min-width:150px}
+  .hint{color:var(--sub);font-size:13px;padding:0 2px}
+  .linkrow{display:flex;justify-content:space-between;align-items:center}
+  .link{color:var(--accent);cursor:pointer;font-weight:600;font-size:13.5px}
+
+  main{padding:6px 10px 130px}
+  .group-letter{color:var(--sub);font-size:13px;font-weight:800;padding:16px 8px 4px;letter-spacing:1.5px}
+  ul.list{list-style:none;margin:0;padding:0}
+  li.tune{display:flex;align-items:center;gap:10px;background:var(--panel);
+    border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin:8px 0;}
+  li.tune .main{flex:1;min-width:0;cursor:pointer}
+  li.tune .title{font-weight:650;font-size:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  li.tune .meta{color:var(--sub);font-size:14px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  li.tune .meta .book{color:#84b6ea}
+  .tagpills{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+  .pill{font-size:11.5px;padding:2px 9px;border-radius:999px;font-weight:600;border:1px solid}
+  .iconbtn{background:var(--panel2);border:1px solid var(--line);border-radius:11px;
+    width:var(--tap);height:var(--tap);min-width:var(--tap);display:flex;align-items:center;justify-content:center;
+    cursor:pointer;font-size:20px;color:var(--sub);user-select:none;}
+  .iconbtn.on-star{color:var(--star);border-color:var(--star)}
+  .iconbtn.on-prac{color:var(--prac);border-color:var(--prac)}
+  .iconbtn.on-tag{color:var(--accent);border-color:var(--accent)}
+  .iconbtn.add{font-size:24px;line-height:1}
+  .empty{color:var(--sub);text-align:center;padding:44px 20px;font-size:16px}
+
+  .viewer{position:fixed;inset:0;background:#0b1118;z-index:60;display:none;flex-direction:column}
+  .viewer.open{display:flex}
+  .vbar{display:flex;align-items:center;gap:9px;padding:11px 14px;
+    padding-top:calc(11px + env(safe-area-inset-top));background:var(--panel);border-bottom:1px solid var(--line)}
+  .vbar .vtitle{flex:1;min-width:0;font-weight:650;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vbar .vsub{color:var(--sub);font-size:13px;font-weight:400}
+  .btn{background:var(--accent2);color:#fff;border:none;border-radius:11px;padding:0 16px;height:var(--tap);
+    font-size:15px;font-weight:650;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .btn.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+  .btn.sm{height:38px;padding:0 12px;font-size:13.5px}
+  .btn:disabled{opacity:.4}
+  .viewer .frame{flex:1;background:#525659}
+  .viewer iframe{width:100%;height:100%;border:none;background:#525659}
+
+  .sheet{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:none}
+  .sheet.open{display:block}
+  .sheet .card{position:absolute;left:0;right:0;bottom:0;max-height:88%;overflow:auto;
+    background:var(--panel);border-top-left-radius:20px;border-top-right-radius:20px;
+    padding:18px 16px calc(26px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+  .sheet h2{font-size:18px;margin:2px 0 14px}
+  .row{display:flex;gap:10px;align-items:center;margin:10px 0;flex-wrap:wrap}
+  .newrow input{flex:1}
+  .chip{background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:8px 14px;
+    font-size:14.5px;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .chip.active{background:var(--accent2);border-color:var(--accent2);color:#fff}
+  .muted{color:var(--sub);font-size:13.5px}
+  .danger{color:var(--danger);cursor:pointer;font-weight:600}
+  .handle{cursor:grab;touch-action:none;font-size:20px;color:var(--sub);
+    width:var(--tap);height:var(--tap);min-width:var(--tap);display:flex;align-items:center;justify-content:center}
+  li.tune.dragging{opacity:.85;border-color:var(--accent);box-shadow:0 8px 22px rgba(0,0,0,.5);background:var(--panel2)}
+  .swatch{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+  .swatch.sel{border-color:#fff}
+
+  /* fit view */
+  .fitwrap{width:100%;height:100%;display:flex;align-items:center;justify-content:flex-start;gap:14px;
+    overflow-x:auto;overflow-y:hidden;background:#3a3d40;padding:10px}
+  .fitwrap.center{justify-content:center}
+  .fitwrap .pg{background:#fff;box-shadow:0 3px 14px rgba(0,0,0,.5);flex:none}
+  .fitwrap img.pg{display:block}
+
+  /* annotation editor */
+  .editor{position:fixed;inset:0;background:#20242a;z-index:70;display:none;flex-direction:column}
+  .editor.open{display:flex}
+  .ebar{display:flex;align-items:center;gap:8px;padding:9px 12px;flex-wrap:wrap;
+    padding-top:calc(9px + env(safe-area-inset-top));background:var(--panel);border-bottom:1px solid var(--line)}
+  .etitle{flex:0 1 240px;min-height:40px;padding:9px 12px}
+  .etools{display:flex;gap:6px}
+  .ebtn{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:10px;
+    height:40px;padding:0 12px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .ebtn.primary{background:var(--accent2);border-color:var(--accent2);color:#fff}
+  .ebtn.on{outline:2px solid var(--accent)}
+  .pen{width:34px;height:34px;border-radius:50%;border:2px solid #33475c;cursor:pointer}
+  .pen.on{border-color:#fff;transform:scale(1.1)}
+  .ecanvaswrap{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;background:#3a3d40;padding:12px}
+  .estack{position:relative;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.5);touch-action:none}
+  .estack canvas{position:absolute;left:0;top:0;display:block}
+  .estack canvas.draw{touch-action:none}
+
+  /* fullscreen (Vollbild) */
+  .viewer.fullscreen .vbar{display:none}
+  .fsclose{position:fixed;top:calc(10px + env(safe-area-inset-top));right:12px;z-index:80;display:none;
+    width:46px;height:46px;border-radius:50%;border:none;background:rgba(20,28,38,.85);color:#fff;
+    font-size:21px;cursor:pointer;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(0,0,0,.55)}
+  .viewer.fullscreen .fsclose{display:flex}
+  .viewer.fullscreen .frame{background:#3a3d40}
+  /* Blätter-Pfeile im Vollbild */
+  .fsnav{position:fixed;top:50%;transform:translateY(-50%);z-index:80;display:none;
+    width:46px;height:66px;border:none;border-radius:12px;background:rgba(20,28,38,.5);color:#fff;
+    font-size:28px;font-weight:700;cursor:pointer;align-items:center;justify-content:center}
+  .fsnav.prev{left:8px} .fsnav.next{right:8px}
+  .viewer.fullscreen .fsnav{display:flex}
+  .fsnav[hidden]{display:none!important}
+  .fsnav:disabled{opacity:.22}
+
+  /* collapsible section headers (Bücher / Anfangsbuchstabe) – nebeneinander, kompakt */
+  .collapse-row{display:flex;gap:10px;flex-wrap:wrap;margin:8px 2px 4px}
+  .collapse-h{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;
+    padding:8px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--line)}
+  .collapse-h:hover{border-color:var(--accent)}
+  .collapse-h.open{border-color:var(--accent2)}
+  .collapse-h .lbl{margin:0}
+  .collapse-h .arrow{color:var(--sub);font-size:12px;transition:transform .18s}
+  .collapse-h.open .arrow{transform:rotate(180deg)}
+  #bookwrap.closed,#azwrap.closed{display:none}
+  /* tag row in header */
+  #tagtabs{margin-top:-2px;padding-bottom:12px}
+  #tagtabs:empty{display:none}
+  .tab.tagtab .badge{background:rgba(255,255,255,.16)}
+  .tab.tagtab.active .badge{background:rgba(255,255,255,.28)}
+  /* share/print icons in viewer buttons */
+  .btn svg{display:block}
+  /* Mehrfachauswahl */
+  .selbox{width:26px;height:26px;min-width:26px;border-radius:7px;border:2px solid var(--line);flex:none;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:15px;background:var(--panel2);user-select:none}
+  .selbox.on{background:var(--accent2);border-color:var(--accent2)}
+  li.tune.selected{border-color:var(--accent2)}
+  .selall{display:flex;align-items:center;gap:10px;color:var(--sub);font-size:14px;padding:8px 6px 0;cursor:pointer;user-select:none}
+  .selall .selbox{width:22px;height:22px;min-width:22px;font-size:13px}
+  .selbar{position:fixed;left:0;right:0;bottom:0;z-index:55;background:var(--panel);border-top:1px solid var(--line);
+    padding:9px 10px calc(9px + env(safe-area-inset-bottom));display:none;flex-direction:column;gap:8px;box-shadow:0 -6px 20px rgba(0,0,0,.45)}
+  .selbar.open{display:flex}
+  .selbar-head{display:flex;align-items:center;gap:12px}
+  .selbar-head .cnt{font-weight:700}
+  .selbar-actions{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+  .selbar-actions .btn{flex:none;white-space:nowrap}
+  .bookgroup{margin:0 0 4px}
+  .gtitle{color:#7f97ad;font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;margin:9px 2px 5px}
+
+  /* tag manage zones */
+  .tagzone{border:1.5px dashed var(--line);border-radius:12px;padding:10px;margin:4px 0 14px;min-height:54px;
+    display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start}
+  .tagzone.over{border-color:var(--accent);background:rgba(74,163,255,.10)}
+  .tagcard{display:flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line);
+    border-radius:999px;padding:7px 12px;cursor:grab;touch-action:none;user-select:none;font-weight:600;font-size:14px}
+  .tagcard.dragging{opacity:.55}
+  .tagcard .grip{color:var(--sub);font-size:14px;cursor:grab}
+  .zonelbl{color:var(--sub);font-size:12px;font-weight:700;margin:4px 2px}
+  .tagedit{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0}
+
+  .tab:focus-visible,.fchip:focus-visible,.chip:focus-visible,.iconbtn:focus-visible,.link:focus-visible,
+  .swatch:focus-visible,.tagcard:focus-visible,.handle:focus-visible,.collapse-h:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .filebanner{position:fixed;top:0;left:0;right:0;z-index:95;background:#7a2e12;color:#ffeede;
+    padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top));font-size:13.5px;line-height:1.4;
+    display:flex;gap:12px;align-items:flex-start;box-shadow:0 2px 12px rgba(0,0,0,.55)}
+  .filebanner b{color:#fff}
+  .filebanner code{background:rgba(0,0,0,.3);padding:1px 5px;border-radius:5px}
+  .filebanner .x{margin-left:auto;cursor:pointer;font-size:18px;flex:none;line-height:1}
+
+  @media(min-width:820px){
+    :root{--fs:18px}
+    main,.controls,header .inner{max-width:920px;margin-left:auto;margin-right:auto}
+    header{padding-left:0;padding-right:0}
+    header .inner{padding-left:16px;padding-right:16px}
+  }
+</style>
+</head>
+<body>
+<div id="topbar">
+<header>
+ <div class="inner">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+  <div class="brand" id="home" title="Zur Startseite">
+    <svg class="logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="Realbook">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#3aa0ff"/><stop offset="1" stop-color="#1f5fbf"/></linearGradient></defs>
+      <rect x="2" y="2" width="96" height="96" rx="22" fill="url(#g)"/>
+      <rect x="2" y="2" width="96" height="96" rx="22" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="1.5"/>
+      <path d="M20 32 C31 26 42 26 50 31 C58 26 69 26 80 32 L80 71 C69 65 58 65 50 70 C42 65 31 65 20 71 Z"
+            fill="rgba(255,255,255,.14)" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/>
+      <line x1="50" y1="31" x2="50" y2="70" stroke="#fff" stroke-width="2.4"/>
+      <circle cx="62" cy="55" r="6.2" fill="#fff"/>
+      <path d="M68 55 L68 33 L79 30" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+    </svg>
+    <div><div class="word">Real<b>book</b></div><div class="count" id="count"></div></div>
+  </div>
+  <div class="iconbtn" id="settingsBtn" title="Daten & Offline" style="background:rgba(255,255,255,.08);font-size:30px">⚙︎</div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div class="tabs" id="tagtabs"></div>
+ </div>
+</header>
+
+<div class="controls" id="controls">
+  <input type="search" id="q" placeholder="Suche: Titel, Komponist, Interpret…" autocomplete="off" autocorrect="off" spellcheck="false">
+  <div class="collapse-row">
+    <div class="collapse-h" id="bookToggle" title="Bücher-Auswahl auf-/zuklappen"><div class="lbl">Bücher</div><span class="arrow">▾</span></div>
+    <div class="collapse-h" id="azToggle" title="Anfangsbuchstaben auf-/zuklappen"><div class="lbl">Anfangsbuchstabe</div><span class="arrow">▾</span></div>
+  </div>
+  <div id="bookwrap" class="closed"><div id="bookbar"></div></div>
+  <div id="azwrap" class="closed"><div class="chiprow scroll" id="azbar"></div></div>
+  <div class="hint" id="hint"></div>
+</div>
+</div>
+
+<main id="main"></main>
+
+<div class="viewer" id="viewer">
+  <div class="vbar">
+    <div class="vtitle"><span id="vTitle"></span> <span class="vsub" id="vSub"></span></div>
+    <div id="seqnav" style="display:none;gap:6px"></div>
+    <button class="btn ghost" id="vFitBtn" title="Vollbild – ganze Seite, ohne Menüs">⛶ Vollbild</button>
+    <button class="btn ghost" id="vEditBtn" title="Handschriftliche Notiz">✏️ Notiz</button>
+    <button class="btn ghost" id="vShare" title="Teilen (Apple Share)"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg> Teilen</button>
+    <button class="btn ghost" id="vPrint" title="Drucken">🖨 Drucken</button>
+    <button class="btn ghost" id="vTab">↗</button>
+    <button class="btn" id="vClose">Schließen</button>
+  </div>
+  <div class="frame">
+    <iframe id="vFrame" title="Noten"></iframe>
+    <div id="vFit" class="fitwrap" style="display:none"></div>
+  </div>
+  <button class="fsclose" id="vFsClose" title="Vollbild verlassen">✕</button>
+  <button class="fsnav prev" id="vFsPrev" title="Vorheriges Stück">‹</button>
+  <button class="fsnav next" id="vFsNext" title="Nächstes Stück">›</button>
+</div>
+
+<!-- Annotation editor -->
+<div class="editor" id="editor">
+  <div class="ebar">
+    <input class="txt etitle" id="eTitle" placeholder="Titel der Notiz…" autocomplete="off">
+    <div class="etools" id="ePens"></div>
+    <button class="ebtn" id="eErase" title="Radierer">◧ Radierer</button>
+    <button class="ebtn" id="eUndo" title="Rückgängig">↶</button>
+    <div id="ePageNav" style="display:none;gap:6px;align-items:center"></div>
+    <span style="flex:1"></span>
+    <button class="ebtn" id="eCancel">Abbrechen</button>
+    <button class="ebtn primary" id="eSave">Speichern</button>
+  </div>
+  <div class="ecanvaswrap" id="eStage"></div>
+</div>
+
+<div class="selbar" id="selbar">
+  <div class="selbar-head"><span class="cnt" id="selCnt"></span><span class="link" id="selClear" style="margin-left:auto">Auswahl aufheben</span></div>
+  <div class="selbar-actions" id="selActions"></div>
+</div>
+
+<div class="sheet" id="sheet"><div class="card" id="sheetCard"></div></div>
+
+<script src="vendor/pdfjs/pdf.min.js"></script>
+<script src="data.js"></script>
+<script>
+const PALETTE=['#e0662b','#2b7de0','#57c98b','#c94ad1','#e0b93a','#4ab5c9','#e0506b','#8b7de0','#7bc043','#d98cae'];
+const S = {
+  view:'all', q:'', initial:'', books:new Set(), comp:'', tagFilter:new Set(),
+  fav:new Set(JSON.parse(localStorage.getItem('rb_fav')||'[]')),
+  prac:new Set(JSON.parse(localStorage.getItem('rb_prac')||'[]')),
+  sets:JSON.parse(localStorage.getItem('rb_sets')||'[]'),
+  tags:JSON.parse(localStorage.getItem('rb_tags')||'[]'),          // [{id,name,color,pinned}]
+  tuneTags:JSON.parse(localStorage.getItem('rb_tunetags')||'{}'),  // key -> [tagId]
+  recent:JSON.parse(localStorage.getItem('rb_recent')||'{}'),      // key -> timestamp zuletzt gespielt
+  recentSort:{by:'date',dir:'desc'},
+  selection:new Set(),   // Mehrfachauswahl (nur Sitzung)
+  _sig:'',
+  sonstOn: localStorage.getItem('rb_sonston')!=='0',  // „Sonstiges Material" einbeziehen (Default an)
+  openSet:null,
+  booksOpen: localStorage.getItem('rb_booksopen')==='1',
+  azOpen: localStorage.getItem('rb_azopen')==='1',
+};
+const TUNES = window.TUNES.map((t,i)=>({...t, key:t.bid+'|'+t.t+'|'+t.pg, idx:i}));
+let USER = JSON.parse(localStorage.getItem('rb_usertunes')||'[]');  // annotated copies (metadata; page images in IndexedDB)
+let byKey = {};
+function ALL(){ return TUNES.concat(USER); }
+function rebuildByKey(){ byKey={}; ALL().forEach(t=>byKey[t.key]=t); }
+rebuildByKey();
+function saveUser(){ localStorage.setItem('rb_usertunes', JSON.stringify(USER)); rebuildByKey(); }
+/* ---- book display names + grouping (by bid; data.js unchanged) ---- */
+const BOOKMETA={
+  realbook1:{name:'Real Book - Vol. 1',chip:'Vol. 1'},
+  realbook2:{name:'Real Book - Vol. 2',chip:'Vol. 2'},
+  realbook3:{name:'Real Book - Vol. 3',chip:'Vol. 3'},
+  realbook1_bb:{name:'Real Book - Vol. 1 - Bb',chip:'Vol. 1 · Bb'},
+  realbook1_eb:{name:'Real Book - Vol. 1 - Eb',chip:'Vol. 1 · Eb'},
+  realbook1_bass:{name:'Real Book - Vol. 1 - Bass',chip:'Vol. 1 · Bass'},
+  realbook3_bb:{name:'Real Book - Vol. 3 - Bb',chip:'Vol. 3 · Bb'},
+  realbook2_bass:{name:'Real Book - Vol. 2 - Bass',chip:'Vol. 2 · Bass'},
+  newreal1:{name:'New Real Book - Vol. 1',chip:'Vol. 1'},
+  newreal2:{name:'New Real Book - Vol. 2',chip:'Vol. 2'},
+  newreal3:{name:'New Real Book - Vol. 3',chip:'Vol. 3'},
+  wgfb:{name:"The World's Greatest Fake Book",chip:"World's Greatest"},
+  enja:{name:'The Enja Book Of Jazz Originals',chip:'Enja Book'},
+  latin:{name:'The Latin Real Book',chip:'Latin Real Book'},
+  thebook:{name:'The Book (Commercial Fake Book)',chip:'The Book'},
+  jazzltd:{name:'Jazz LTD',chip:'Jazz LTD'},
+  legalmusician:{name:"The Original Musicians' Fake Book",chip:"Musicians' Fake Book"},
+  user:{name:'Sonstiges Material',chip:'Sonstiges Material'},
+};
+const SONST_BID='user';
+const BOOK_GROUPS=[
+  {label:'Real Book', bids:['realbook1','realbook2','realbook3']},
+  {label:'Real Book – transponiert', bids:['realbook1_bb','realbook1_eb','realbook1_bass','realbook3_bb','realbook2_bass']},
+  {label:'New Real Book', bids:['newreal1','newreal2','newreal3']},
+  {label:'Weitere Bücher', bids:['wgfb','enja','latin','thebook','jazzltd','legalmusician']},
+  {label:'Eigenes', bids:['user']},
+];
+const PRESENT_BIDS=new Set(TUNES.map(t=>t.bid));
+function bookName(t){ const m=BOOKMETA[t.bid]; return m?m.name:(t.b||t.bid); }
+function bookChip(bid){ const m=BOOKMETA[bid]; return m?m.chip:bid; }
+const ALLBOOKS=[...PRESENT_BIDS];
+
+function save(){
+  localStorage.setItem('rb_fav',JSON.stringify([...S.fav]));
+  localStorage.setItem('rb_prac',JSON.stringify([...S.prac]));
+  localStorage.setItem('rb_sets',JSON.stringify(S.sets));
+  localStorage.setItem('rb_tags',JSON.stringify(S.tags));
+  localStorage.setItem('rb_tunetags',JSON.stringify(S.tuneTags));
+  localStorage.setItem('rb_recent',JSON.stringify(S.recent));
+}
+/* Metronom-Icon (SVG). on=true → gefüllt (aktiv). */
+function metroIcon(on,size){ size=size||22; return `<svg class="metro" viewBox="0 0 24 24" width="${size}" height="${size}" fill="${on?'currentColor':'none'}" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M8.6 3.4h6.8l2.1 16.4a1.1 1.1 0 0 1-1.1 1.2H7.6a1.1 1.1 0 0 1-1.1-1.2z"/><path d="M11.7 20.6 14.9 6.2" stroke="${on?'#0b1118':'currentColor'}"/><circle cx="15.2" cy="5.6" r="1.15" fill="${on?'#0b1118':'currentColor'}" stroke="none"/></svg>`; }
+function markPlayed(t){ if(!t||!t.key)return; S.recent[t.key]=Date.now(); localStorage.setItem('rb_recent',JSON.stringify(S.recent)); renderTabs(); }
+function norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+  .replace(/^(the|a|an) /,'').replace(/[^a-z0-9 ]/g,'').trim();}
+function initialOf(t){const c=(norm(t.t)[0]||'#');return /[0-9]/.test(c)?'#':c.toUpperCase();}
+function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function tagById(id){return S.tags.find(x=>x.id===id);}
+function tuneTagIds(key){return S.tuneTags[key]||[];}
+
+/* ---- count ---- */
+(function(){
+  document.getElementById('count').textContent = TUNES.length+' Stücke · '+ALLBOOKS.length+(ALLBOOKS.length===1?' Buch':' Bücher');
+})();
+
+function matches(t){
+  if(S.books.size && !S.books.has(t.bid)) return false;
+  if(S.initial && initialOf(t)!==S.initial) return false;
+  if(S.q){const q=norm(S.q); if(!norm(t.t).includes(q) && !norm(t.c).includes(q) && !norm(t.editor).includes(q)) return false;}
+  if(S.tagFilter.size){const tt=tuneTagIds(t.key); if(![...S.tagFilter].some(id=>tt.includes(id))) return false;}
+  return true;
+}
+function currentList(){
+  let list=ALL().filter(matches);
+  // „Sonstiges Material" ausblenden, wenn abgeschaltet (außer im Reiter „Bearbeitet" oder wenn gezielt gefiltert)
+  if(!S.sonstOn && S.view!=='edited' && !S.books.has(SONST_BID)) list=list.filter(t=>t.bid!==SONST_BID);
+  if(S.view==='fav') list=list.filter(t=>S.fav.has(t.key));
+  else if(S.view==='prac') list=list.filter(t=>S.prac.has(t.key));
+  else if(S.view==='edited'){ list=list.filter(t=>t.isEdit); list.sort((a,b)=>(b.editedAt||0)-(a.editedAt||0)); return list; }
+  else if(S.view.startsWith('tag:')){const id=S.view.slice(4); list=list.filter(t=>tuneTagIds(t.key).includes(id));}
+  list.sort((a,b)=>norm(a.t).localeCompare(norm(b.t))|| a.b.localeCompare(b.b));
+  return list;
+}
+
+/* ---------- top tabs (incl. pinned tags) ---------- */
+function renderTabs(){
+  const el=document.getElementById('tabs'); el.innerHTML='';
+  const base=[
+    ['all','Alle',null,''],
+    ['fav','★ Favoriten',S.fav.size,''],
+    ['prac','Üben',S.prac.size, metroIcon(false,15)],
+    ['recent','🕒 Zuletzt', Object.keys(S.recent).length, ''],
+    ['edited','✏️ Bearbeitet',USER.length,''],
+    ['set','Setlists',S.sets.length,''],
+  ];
+  base.forEach(([v,label,badge,icon])=>{
+    const d=document.createElement('div'); d.className='tab'+(S.view===v?' active':''); d.dataset.view=v;
+    d.innerHTML=(icon||'')+esc(label)+(badge!=null?` <span class="badge">${badge}</span>`:'');
+    d.onclick=()=>{S.view=v;S.openSet=null;render();}; el.append(d);
+  });
+  const mng=document.createElement('div'); mng.className='tab'; mng.style.borderStyle='dashed';
+  mng.innerHTML='🏷 Tags verwalten';
+  mng.onclick=manageTagsFlow; el.append(mng);
+  renderTagTabs();
+}
+function tagCount(id){ let n=0; for(const k in S.tuneTags){ if((S.tuneTags[k]||[]).includes(id)) n++; } return n; }
+function renderTagTabs(){
+  const el=document.getElementById('tagtabs'); if(!el) return; el.innerHTML='';
+  const tags=S.tags.filter(t=>t.pinned || tagCount(t.id)>0);
+  tags.sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0) || norm(a.name).localeCompare(norm(b.name)));
+  tags.forEach(tag=>{
+    const v='tag:'+tag.id;
+    const d=document.createElement('div'); d.className='tab tagtab'+(S.view===v?' active':''); d.dataset.view=v;
+    d.innerHTML=`<span class="dot" style="background:${tag.color}"></span>${esc(tag.name)} <span class="badge">${tagCount(tag.id)}</span>`;
+    d.onclick=()=>{S.view=v;S.openSet=null;render();}; el.append(d);
+  });
+}
+
+/* ---------- filter bars ---------- */
+function renderAZ(){
+  const bar=document.getElementById('azbar'); bar.innerHTML='';
+  const present=new Set(TUNES.map(initialOf));
+  const letters=['#',...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')].filter(l=>present.has(l));
+  letters.forEach(l=>{
+    const c=document.createElement('div'); c.className='fchip azchip'+(S.initial===l?' active':''); c.textContent=l;
+    c.onclick=()=>{S.initial=(S.initial===l?'':l);render();}; bar.append(c);
+  });
+}
+function renderBooks(){
+  const bar=document.getElementById('bookbar'); bar.innerHTML='';
+  BOOK_GROUPS.forEach(g=>{
+    const bids=g.bids.filter(b=>PRESENT_BIDS.has(b)||b===SONST_BID);
+    if(!bids.length) return;
+    const grp=document.createElement('div'); grp.className='bookgroup';
+    const gt=document.createElement('div'); gt.className='gtitle'; gt.textContent=g.label; grp.append(gt);
+    const row=document.createElement('div'); row.className='chiprow'; grp.append(row);
+    bids.forEach(bid=>{
+      const c=document.createElement('div'); c.className='fchip'+(S.books.has(bid)?' active':'');
+      c.textContent=bookChip(bid); c.title=(BOOKMETA[bid]||{}).name||bid;
+      c.onclick=()=>{S.books.has(bid)?S.books.delete(bid):S.books.add(bid);render();}; row.append(c);
+    });
+    bar.append(grp);
+  });
+}
+
+/* ---------- list ---------- */
+function tuneRow(t){
+  const li=document.createElement('li'); li.className='tune'; li.dataset.key=t.key;
+  const star=S.fav.has(t.key), prac=S.prac.has(t.key);
+  const tt=tuneTagIds(t.key); const hasTags=tt.length>0;
+  const pages = t.np>1 ? ' · '+t.np+' S.' : '';
+  const pillsHTML = hasTags? '<div class="tagpills">'+tt.map(id=>{const tg=tagById(id);return tg?`<span class="pill" style="color:${tg.color};border-color:${tg.color};background:${tg.color}22">${esc(tg.name)}</span>`:''}).join('')+'</div>':'';
+  let metaHTML;
+  if(t.isEdit){ const d=t.editedAt?new Date(t.editedAt).toLocaleDateString('de-DE'):'';
+    metaHTML=`✏️ ${t.editor?esc(t.editor)+' · ':''}<span class="book">${esc(bookName(t))}</span>${d?' · '+d:''}${pages}`; }
+  else metaHTML=`${t.c?esc(t.c)+' · ':''}<span class="book">${esc(bookName(t))}</span> · S. ${esc(t.pg)}${pages}`;
+  li.innerHTML=`
+    <div class="main">
+      <div class="title">${esc(t.t)}</div>
+      <div class="meta">${metaHTML}</div>
+      ${pillsHTML}
+    </div>
+    <div class="iconbtn ${hasTags?'on-tag':''}" data-a="tag" title="Tags">🏷</div>
+    <div class="iconbtn add" title="Zu Setlist">＋</div>
+    <div class="iconbtn ${prac?'on-prac':''}" data-a="prac" title="Üben">${metroIcon(prac)}</div>
+    <div class="iconbtn ${star?'on-star':''}" data-a="star" title="Favorit">${star?'★':'☆'}</div>`;
+  li.querySelector('.main').onclick=()=>openViewer(t);
+  li.querySelector('[data-a=tag]').onclick=()=>assignTagsFlow(t);
+  li.querySelector('.add').onclick=()=>addToSetlistFlow(t);
+  li.querySelector('[data-a=prac]').onclick=()=>toggle(S.prac,t.key);
+  li.querySelector('[data-a=star]').onclick=()=>toggle(S.fav,t.key);
+  li.prepend(selBox(t.key)); if(S.selection.has(t.key)) li.classList.add('selected');
+  return li;
+}
+function toggle(set,key){ set.has(key)?set.delete(key):set.add(key); save(); render(); }
+
+/* ---------- Mehrfachauswahl ---------- */
+function cssEsc(s){ return (window.CSS&&CSS.escape)?CSS.escape(s):String(s).replace(/["\\]/g,'\\$&'); }
+function selBox(key){
+  const b=document.createElement('div'); const on=S.selection.has(key);
+  b.className='selbox'+(on?' on':''); b.innerHTML=on?'✓':''; b.title='Auswählen';
+  b.onclick=e=>{ e.stopPropagation(); toggleSel(key); };
+  return b;
+}
+function toggleSel(key){
+  if(S.selection.has(key)) S.selection.delete(key); else S.selection.add(key);
+  const li=document.querySelector('li.tune[data-key="'+cssEsc(key)+'"]');
+  if(li){ const on=S.selection.has(key); li.classList.toggle('selected',on);
+    const b=li.querySelector('.selbox'); if(b){ b.classList.toggle('on',on); b.innerHTML=on?'✓':''; } }
+  renderSelBar();
+}
+function refreshSelUI(){
+  document.querySelectorAll('li.tune').forEach(li=>{ const on=S.selection.has(li.dataset.key);
+    li.classList.toggle('selected',on); const b=li.querySelector('.selbox'); if(b){ b.classList.toggle('on',on); b.innerHTML=on?'✓':''; } });
+  document.querySelectorAll('.selall').forEach(r=>r.dispatchEvent(new CustomEvent('rf')));
+  renderSelBar();
+}
+function selectAllRow(keys){
+  const row=document.createElement('div'); row.className='selall';
+  const b=document.createElement('div'); b.className='selbox'; const t=document.createElement('span');
+  const sync=()=>{ const all=keys.length&&keys.every(k=>S.selection.has(k));
+    b.classList.toggle('on',all); b.innerHTML=all?'✓':''; t.textContent=(all?'Auswahl aufheben':'Alle auswählen')+' ('+keys.length+')'; };
+  row.append(b,t); sync(); row.addEventListener('rf',sync);
+  row.onclick=()=>{ const all=keys.length&&keys.every(k=>S.selection.has(k));
+    if(all) keys.forEach(k=>S.selection.delete(k)); else keys.forEach(k=>S.selection.add(k)); refreshSelUI(); };
+  return row;
+}
+function hasSelectedNotes(){ return [...S.selection].some(k=>byKey[k]&&byKey[k].isEdit); }
+function renderSelBar(){
+  const bar=document.getElementById('selbar'), n=S.selection.size;
+  document.getElementById('selCnt').textContent=n+' ausgewählt';
+  const act=document.getElementById('selActions'); act.innerHTML='';
+  if(!n){ bar.classList.remove('open'); return; }
+  const mk=(html,fn)=>{ const b=document.createElement('button'); b.className='btn ghost sm'; b.innerHTML=html; b.onclick=fn; act.append(b); };
+  mk('＋ Setlist', bulkSetlistFlow);
+  mk('Üben ＋', ()=>bulkSet(S.prac,true));
+  mk('Üben −', ()=>bulkSet(S.prac,false));
+  mk('★ ＋', ()=>bulkSet(S.fav,true));
+  mk('★ −', ()=>bulkSet(S.fav,false));
+  mk('🏷 Tags', bulkTagsFlow);
+  mk('⤴ Teilen', bulkShare);
+  mk('🖨 Drucken', bulkPrint);
+  if(S.view==='set' && S.openSet) mk('Aus Setlist entfernen', bulkRemoveFromSet);
+  if(hasSelectedNotes()) mk('🗑 Notiz löschen', bulkDeleteNotes);
+  bar.classList.add('open'); a11y(bar);
+}
+document.getElementById('selClear').onclick=()=>{ S.selection.clear(); refreshSelUI(); };
+function bulkSet(ref,add){ [...S.selection].forEach(k=> add?ref.add(k):ref.delete(k)); save(); render(); }
+function bulkRemoveFromSet(){ const st=S.sets.find(s=>s.id===S.openSet); if(!st)return;
+  st.items=st.items.filter(k=>!S.selection.has(k)); st.updatedAt=Date.now(); S.selection.clear(); save(); render(); }
+function bulkDeleteNotes(){
+  const notes=[...S.selection].map(k=>byKey[k]).filter(t=>t&&t.isEdit); if(!notes.length){ alert('Nur eigene handschriftliche Notizen können gelöscht werden.'); return; }
+  if(!confirm(notes.length+' Notiz(en) endgültig löschen? Das lässt sich nicht rückgängig machen.')) return;
+  notes.forEach(t=>{ try{ idbDeletePages(t.key); }catch(e){} USER=USER.filter(u=>u.key!==t.key);
+    delete S.recent[t.key]; S.fav.delete(t.key); S.prac.delete(t.key); delete S.tuneTags[t.key];
+    S.sets.forEach(st=>st.items=st.items.filter(k=>k!==t.key)); });
+  S.selection.clear(); saveUser(); save(); render();
+}
+function bulkSetlistFlow(){
+  const keys=[...S.selection]; if(!keys.length)return;
+  openSheet(card=>{
+    card.innerHTML=`<h2>${keys.length} Stücke zu Setlist</h2>`;
+    const wrap=document.createElement('div'); wrap.className='row'; wrap.style.flexWrap='wrap';
+    if(!S.sets.length) wrap.innerHTML='<div class="muted">Noch keine Setlist. Unten neue anlegen.</div>';
+    S.sets.forEach(st=>{ const c=document.createElement('div'); c.className='chip';
+      c.innerHTML=esc(st.name)+' <span class="muted">('+st.items.length+')</span>';
+      c.onclick=()=>{ keys.forEach(k=>{ if(!st.items.includes(k)) st.items.push(k); }); st.updatedAt=Date.now(); save(); closeSheet(); render(); };
+      wrap.append(c); });
+    card.append(wrap);
+    const nr=document.createElement('div'); nr.className='row newrow';
+    nr.innerHTML='<input class="txt" id="newSet" placeholder="Neue Setlist…"><button class="btn" id="mk">Anlegen</button>';
+    card.append(nr);
+    nr.querySelector('#mk').onclick=()=>{const v=nr.querySelector('#newSet').value.trim();if(!v)return;
+      S.sets.push({id:uid('s'),name:v,items:[...keys],updatedAt:Date.now()}); save(); closeSheet(); render();};
+    const close=document.createElement('div'); close.className='row'; close.style.marginTop='12px';
+    close.innerHTML='<button class="btn" id="dn" style="flex:1">Fertig</button>'; close.querySelector('#dn').onclick=closeSheet; card.append(close);
+    a11y(card);
+  });
+}
+function bulkTagsFlow(){
+  const keys=[...S.selection]; if(!keys.length)return;
+  openSheet(card=>{
+    card.innerHTML=`<h2>Tags für ${keys.length} Stücke</h2><div class="muted" style="margin:-6px 0 12px">Tippe einen Tag zum <b>Hinzufügen</b> zu allen; das „−" <b>entfernt</b> ihn von allen.</div>`;
+    if(!S.tags.length) card.insertAdjacentHTML('beforeend','<div class="muted">Noch keine Tags – unten anlegen.</div>');
+    const wrap=document.createElement('div'); wrap.className='row'; wrap.style.flexWrap='wrap';
+    S.tags.forEach(tag=>{ const c=document.createElement('div'); c.className='chip'; c.style.borderColor=tag.color;
+      c.innerHTML=`<span class="dot" style="width:9px;height:9px;border-radius:50%;background:${tag.color}"></span>${esc(tag.name)}<span class="danger" data-x="1" title="Von allen entfernen" style="margin-left:6px;font-weight:800">−</span>`;
+      c.onclick=()=>{ keys.forEach(k=>{ const arr=tuneTagIds(k).slice(); if(!arr.includes(tag.id)){ arr.push(tag.id); S.tuneTags[k]=arr; } }); save(); closeSheet(); render(); };
+      c.querySelector('[data-x]').onclick=e=>{ e.stopPropagation(); keys.forEach(k=>{ const arr=tuneTagIds(k).filter(id=>id!==tag.id); if(arr.length)S.tuneTags[k]=arr; else delete S.tuneTags[k]; }); save(); closeSheet(); render(); };
+      wrap.append(c); });
+    card.append(wrap);
+    const nr=document.createElement('div'); nr.className='row newrow';
+    nr.innerHTML='<input class="txt" id="ntg" placeholder="Neuer Tag…"><button class="btn" id="mk">Anlegen & zuweisen</button>';
+    card.append(nr);
+    nr.querySelector('#mk').onclick=()=>{const v=nr.querySelector('#ntg').value.trim();if(!v)return;
+      const tag={id:uid('t'),name:v,color:PALETTE[S.tags.length%PALETTE.length],pinned:false,updatedAt:Date.now()}; S.tags.push(tag);
+      keys.forEach(k=>{ const arr=tuneTagIds(k).slice(); arr.push(tag.id); S.tuneTags[k]=arr; }); save(); closeSheet(); render();};
+    const close=document.createElement('div'); close.className='row'; close.style.marginTop='12px';
+    close.innerHTML='<button class="btn" id="dn" style="flex:1">Fertig</button>'; close.querySelector('#dn').onclick=closeSheet; card.append(close);
+    a11y(card);
+  });
+}
+async function bulkShare(){
+  const items=[...S.selection].map(k=>byKey[k]).filter(Boolean); if(!items.length)return;
+  try{ const files=[];
+    for(const t of items){ if(t.isEdit) continue; const bl=await (await fetch(encodeURI(t.f))).blob(); files.push(new File([bl],safeName(t.t)+'.pdf',{type:'application/pdf'})); }
+    if(files.length && navigator.canShare && navigator.canShare({files})){ await navigator.share({files, title:items.length+' Stücke'}); return; }
+    if(navigator.share){ await navigator.share({title:items.length+' Stücke', text:items.map(t=>t.t).join(', ')}); return; }
+  }catch(e){ if(e&&e.name==='AbortError')return; }
+  alert('Teilen ist hier nicht verfügbar (nur über localhost/Netlify bzw. die installierte App). Ich öffne stattdessen den Druck-Dialog.');
+  bulkPrint();
+}
+function bulkPrint(){
+  const items=[...S.selection].map(k=>byKey[k]).filter(t=>t&&!t.isEdit); if(!items.length){ alert('Keine druckbaren Stücke ausgewählt.'); return; }
+  const embeds=items.map(t=>`<div style="page-break-after:always"><embed src="${encodeURI(t.f)}" type="application/pdf" width="100%" height="1000px"></div>`).join('');
+  const w=window.open('','_blank'); if(!w){ alert('Bitte Pop-ups erlauben, um zu drucken.'); return; }
+  w.document.write(`<html><head><title>Auswahl (${items.length})</title></head><body style="margin:0">${embeds}<script>setTimeout(()=>window.print(),900)<\/script></body></html>`); w.document.close();
+}
+
+function render(){
+  const sig=S.view+'|'+(S.openSet||'');
+  if(S._sig!==sig){ S.selection.clear(); S._sig=sig; }
+  requestAnimationFrame(()=>{ a11y(); renderSelBar(); });
+  renderTabs(); renderAZ(); renderBooks();
+  document.getElementById('controls').style.display = (S.view==='set'||S.view==='recent') ? 'none':'flex';
+  const main=document.getElementById('main'); main.innerHTML='';
+  if(S.view==='set'){ renderSets(main); return; }
+  if(S.view==='recent'){ renderRecent(main); return; }
+  const list=currentList();
+  const active=[];
+  if(S.initial) active.push('Buchstabe '+S.initial);
+  if(S.books.size) active.push(S.books.size+' Buch'+(S.books.size>1?'…':''));
+  if(S.tagFilter.size) active.push(S.tagFilter.size+' Tag'+(S.tagFilter.size>1?'s':''));
+  document.getElementById('hint').textContent = list.length+' Treffer'+(active.length?' · '+active.join(' · '):'');
+  if(!list.length){ main.innerHTML='<div class="empty">Keine Treffer.</div>'; LISTNAV=[]; return; }
+  LISTNAV=list.map(t=>t.key);
+  main.append(selectAllRow(list.map(t=>t.key)));
+  let cur=null, ul=null;
+  list.forEach(t=>{
+    const L=initialOf(t);
+    if(L!==cur){cur=L;const h=document.createElement('div');h.className='group-letter';h.textContent=cur;main.append(h);
+      ul=document.createElement('ul');ul.className='list';main.append(ul);}
+    ul.append(tuneRow(t));
+  });
+}
+
+/* ---------- Home ---------- */
+function goHome(){
+  S.view='all';S.q='';S.initial='';S.books=new Set();S.comp='';S.tagFilter=new Set();S.openSet=null;
+  document.getElementById('q').value='';
+  closeSheet();document.getElementById('vClose').click();window.scrollTo(0,0);render();
+}
+document.getElementById('home').onclick=goHome;
+
+/* collapsible panels: Bücher + Anfangsbuchstabe */
+function setupCollapse(toggleId, wrapId, stateKey, lsKey){
+  const h=document.getElementById(toggleId), wrap=document.getElementById(wrapId);
+  const set=()=>{ h.classList.toggle('open',S[stateKey]); wrap.classList.toggle('closed',!S[stateKey]); };
+  h.onclick=()=>{ S[stateKey]=!S[stateKey]; localStorage.setItem(lsKey,S[stateKey]?'1':'0'); set(); };
+  set();
+}
+setupCollapse('bookToggle','bookwrap','booksOpen','rb_booksopen');
+setupCollapse('azToggle','azwrap','azOpen','rb_azopen');
+
+/* ---------- Viewer ---------- */
+let CURRENT=null, fitOn=false;
+let LISTNAV=[];               // Keys der aktuell angezeigten Liste (Kontext-Blättern)
+let NAV={keys:[],idx:0};      // aktueller Blätter-Kontext im Betrachter
+function openViewer(t, keepNav){
+  CURRENT=t; fitOn=false;
+  if(!keepNav){ const i=LISTNAV.indexOf(t.key); NAV = (i>=0)?{keys:LISTNAV.slice(), idx:i} : {keys:[t.key], idx:0}; }
+  document.getElementById('vTitle').textContent=t.t;
+  document.getElementById('vSub').textContent = t.isEdit
+    ? ('✏️ '+(t.editor||'')+(t.editedAt?' — '+new Date(t.editedAt).toLocaleString('de-DE'):''))
+    : ((t.c?t.c+' — ':'')+t.b+', S. '+t.pg);
+  const frame=document.getElementById('vFrame'), fit=document.getElementById('vFit');
+  document.getElementById('viewer').classList.remove('fullscreen'); fitOn=false;
+  resetFrameStyle();
+  document.getElementById('vFitBtn').classList.remove('on');
+  document.getElementById('vFitBtn').style.display='flex';
+  document.getElementById('vEditBtn').style.display = t.isEdit ? 'none':'flex';
+  document.getElementById('vShare').onclick=()=>shareTune(t);
+  document.getElementById('vPrint').onclick=()=>printCurrent(t);
+  if(t.isEdit){
+    frame.style.display='none'; frame.src='about:blank';
+    fit.style.display='flex'; document.getElementById('vTab').style.display='none';
+    renderUserFit(t);
+  } else {
+    fit.style.display='none'; fit.innerHTML='';
+    frame.style.display='block'; frame.src=encodeURI(t.f)+'#toolbar=1&view=FitH';
+    document.getElementById('vTab').style.display='flex';
+    document.getElementById('vTab').onclick=()=>window.open(encodeURI(t.f),'_blank');
+  }
+  updateNavUI();
+  document.getElementById('viewer').classList.add('open');
+  markPlayed(t);
+}
+function updateNavUI(){
+  const multi=NAV.keys.length>1;
+  const nav=document.getElementById('seqnav');
+  if(!multi){ nav.style.display='none'; nav.innerHTML=''; }
+  else{
+    nav.style.display='flex';
+    nav.innerHTML='<button class="btn ghost" id="navPrev" title="Vorheriges">‹</button>'
+      +'<span id="navPos" style="align-self:center;color:var(--sub);font-size:13px;white-space:nowrap"></span>'
+      +'<button class="btn ghost" id="navNext" title="Nächstes">›</button>';
+    document.getElementById('navPos').textContent=(NAV.idx+1)+' / '+NAV.keys.length;
+    const pv=document.getElementById('navPrev'), nx=document.getElementById('navNext');
+    pv.disabled=NAV.idx<=0; nx.disabled=NAV.idx>=NAV.keys.length-1;
+    pv.onclick=()=>navGo(-1); nx.onclick=()=>navGo(1);
+  }
+  const fp=document.getElementById('vFsPrev'), fn=document.getElementById('vFsNext');
+  fp.hidden=!multi; fn.hidden=!multi;
+  fp.disabled=NAV.idx<=0; fn.disabled=NAV.idx>=NAV.keys.length-1;
+}
+function navGo(delta){
+  if(NAV.keys.length<2) return;
+  const i=NAV.idx+delta; if(i<0||i>=NAV.keys.length) return;
+  const wasFull=document.getElementById('viewer').classList.contains('fullscreen');
+  NAV={keys:NAV.keys, idx:i}; const t=byKey[NAV.keys[i]]; if(!t) return;
+  openViewer(t, true);
+  if(wasFull) enterFullscreen();
+}
+document.getElementById('vFsPrev').onclick=()=>navGo(-1);
+document.getElementById('vFsNext').onclick=()=>navGo(1);
+/* horizontales Wischen im Vollbild-Betrachter */
+(function(){
+  const el=document.getElementById('vFit'); let x0=null,y0=null,t0=0;
+  el.addEventListener('touchstart',e=>{ if(e.touches.length!==1){x0=null;return;} x0=e.touches[0].clientX; y0=e.touches[0].clientY; t0=Date.now(); },{passive:true});
+  el.addEventListener('touchend',e=>{ if(x0==null)return; const c=e.changedTouches[0]; const dx=c.clientX-x0, dy=c.clientY-y0; x0=null;
+    if(Date.now()-t0>700) return; if(Math.abs(dx)<55 || Math.abs(dx)<Math.abs(dy)*1.4) return; navGo(dx<0?1:-1); },{passive:true});
+})();
+/* Pfeiltasten links/rechts blättern (funktionieren, wenn nicht in der Nativ-PDF-Ansicht fokussiert) */
+document.addEventListener('keydown',e=>{
+  if(!document.getElementById('viewer').classList.contains('open')) return;
+  if(e.key==='ArrowRight'){ e.preventDefault(); navGo(1); }
+  else if(e.key==='ArrowLeft'){ e.preventDefault(); navGo(-1); }
+});
+document.getElementById('vClose').onclick=()=>{
+  document.getElementById('viewer').classList.remove('open','fullscreen');
+  document.getElementById('vFrame').src='about:blank';
+  document.getElementById('vFit').innerHTML=''; document.getElementById('vFit').style.display='none';
+  document.getElementById('vFrame').style.display='block'; fitOn=false; CURRENT=null;
+  document.getElementById('seqnav').style.display='none';document.getElementById('seqnav').innerHTML='';
+  NAV={keys:[],idx:0};
+};
+function enterFullscreen(){
+  if(!CURRENT) return;
+  const frame=document.getElementById('vFrame'), fit=document.getElementById('vFit');
+  fitOn=true; document.getElementById('viewer').classList.add('fullscreen');
+  document.getElementById('vFitBtn').classList.add('on');
+  frame.style.display='none'; fit.style.display='flex';
+  fit.innerHTML='<div style="color:#e6eef6;margin:auto">Lädt…</div>';
+  // Menüleiste ist jetzt ausgeblendet – erst nach Reflow messen, damit die volle Höhe genutzt wird
+  const doFit=()=>{ if(!CURRENT) return; if(CURRENT.isEdit) renderUserFit(CURRENT); else renderPdfFit(CURRENT); };
+  requestAnimationFrame(()=>requestAnimationFrame(doFit));
+}
+function exitFullscreen(){
+  const frame=document.getElementById('vFrame'), fit=document.getElementById('vFit');
+  fitOn=false; document.getElementById('viewer').classList.remove('fullscreen');
+  document.getElementById('vFitBtn').classList.remove('on');
+  fit.innerHTML=''; resetFrameStyle();
+  if(CURRENT && CURRENT.isEdit){ fit.style.display='flex'; frame.style.display='none'; renderUserFit(CURRENT); }
+  else { fit.style.display='none'; frame.style.display='block';
+    // Anzeige neu laden, damit Safari die Seite wieder in voller Größe rendert (sonst „Briefmarke")
+    if(CURRENT) frame.src=encodeURI(CURRENT.f)+'#toolbar=1&view=FitH'; }
+}
+document.getElementById('vFitBtn').onclick=()=>{
+  if(!CURRENT) return;
+  if(document.getElementById('viewer').classList.contains('fullscreen')) exitFullscreen(); else enterFullscreen();
+};
+document.getElementById('vFsClose').onclick=exitFullscreen;
+document.getElementById('vEditBtn').onclick=()=>{ if(CURRENT && !CURRENT.isEdit) openEditor(CURRENT); };
+
+/* ---------- Teilen (Web Share) + Drucken ---------- */
+function safeName(s){ return (s||'Stück').replace(/[\/\\:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim().slice(0,80); }
+async function fetchAsFile(t){
+  if(t.isEdit){ const pages=await idbGetPages(t.key); if(!pages.length) return null;
+    const bl=await (await fetch(pages[0])).blob(); return new File([bl], safeName(t.t)+'.png',{type:'image/png'}); }
+  const bl=await (await fetch(encodeURI(t.f))).blob(); return new File([bl], safeName(t.t)+'.pdf',{type:'application/pdf'});
+}
+async function shareTune(t){
+  if(!t) return;
+  const title=t.t, url=new URL(encodeURI(t.f), location.href).href;
+  // 1) Datei teilen (iPad/iPhone + neuere macOS): öffnet den Apple-Share-Dialog inkl. Drucken
+  try{ const f=await fetchAsFile(t);
+    if(f && navigator.canShare && navigator.canShare({files:[f]})){ await navigator.share({files:[f], title}); return; } }
+  catch(e){ if(e && e.name==='AbortError') return; }
+  // 2) URL teilen (öffnet auch auf dem Mac den Apple-Share-Dialog)
+  try{ if(navigator.share){ await navigator.share({title, url}); return; } }
+  catch(e){ if(e && e.name==='AbortError') return; }
+  // 3) Web Share nicht verfügbar (z. B. Doppelklick/file://)
+  alert('Teilen ist hier nicht verfügbar – es funktioniert in der installierten App bzw. über die gehostete Adresse (Netlify) oder localhost. Ich öffne stattdessen den Druck-Dialog.');
+  printCurrent(t);
+}
+function printCurrent(t){
+  if(!t) return;
+  if(t.isEdit){ printImages(t); return; }
+  const frame=document.getElementById('vFrame');
+  try{ if(frame && frame.style.display!=='none' && frame.contentWindow){ frame.contentWindow.focus(); frame.contentWindow.print(); return; } }catch(e){}
+  const w=window.open(encodeURI(t.f),'_blank'); try{ w&&w.addEventListener&&w.addEventListener('load',()=>{try{w.print();}catch(e){}}); }catch(e){}
+}
+async function shareSetlist(st){
+  const items=st.items.map(k=>byKey[k]).filter(Boolean); if(!items.length) return;
+  try{
+    const files=[];
+    for(const t of items){ if(t.isEdit) continue; const bl=await (await fetch(encodeURI(t.f))).blob();
+      files.push(new File([bl], safeName(t.t)+'.pdf',{type:'application/pdf'})); }
+    if(files.length && navigator.canShare && navigator.canShare({files})){ await navigator.share({files, title:st.name}); return; }
+    if(navigator.share){ await navigator.share({title:st.name, text:st.name}); return; }
+  }catch(e){ if(e && e.name==='AbortError') return; }
+  printSetlist(st);
+}
+
+/* ---------- Tags: assign to a tune ---------- */
+function uid(p){return (p||'x')+Math.abs(Date.now()%1e7)+Math.floor(performance.now()%1000);}
+function assignTagsFlow(t){
+  openSheet(card=>{
+    card.innerHTML=`<h2>Tags für „${esc(t.t)}"</h2>`;
+    const wrap=document.createElement('div'); wrap.className='row'; wrap.style.flexWrap='wrap';
+    if(!S.tags.length) wrap.innerHTML='<div class="muted">Noch keine Tags – unten anlegen.</div>';
+    const cur=tuneTagIds(t.key);
+    S.tags.forEach(tag=>{
+      const on=cur.includes(tag.id);
+      const c=document.createElement('div'); c.className='chip'+(on?' active':'');
+      c.style.borderColor=tag.color; if(on)c.style.background=tag.color;
+      c.innerHTML=`<span class="dot" style="width:9px;height:9px;border-radius:50%;background:${on?'#fff':tag.color}"></span>${esc(tag.name)}`;
+      c.onclick=()=>{
+        const arr=tuneTagIds(t.key).slice();
+        const i=arr.indexOf(tag.id); if(i>=0)arr.splice(i,1); else arr.push(tag.id);
+        if(arr.length)S.tuneTags[t.key]=arr; else delete S.tuneTags[t.key];
+        save(); assignTagsFlow(t); render();
+      };
+      wrap.append(c);
+    });
+    card.append(wrap);
+    const nr=document.createElement('div'); nr.className='row newrow';
+    nr.innerHTML='<input class="txt" id="newTag" placeholder="Neuer Tag…"><button class="btn" id="mk">Anlegen</button>';
+    card.append(nr);
+    nr.querySelector('#mk').onclick=()=>{
+      const v=nr.querySelector('#newTag').value.trim(); if(!v)return;
+      const tag={id:uid('t'),name:v,color:PALETTE[S.tags.length%PALETTE.length],pinned:false,updatedAt:Date.now()};
+      S.tags.push(tag);
+      const arr=tuneTagIds(t.key).slice(); arr.push(tag.id); S.tuneTags[t.key]=arr;
+      save(); assignTagsFlow(t); render();
+    };
+    const close=document.createElement('div'); close.className='row'; close.style.marginTop='12px';
+    close.innerHTML='<button class="btn" id="dn" style="flex:1">Fertig</button>';
+    close.querySelector('#dn').onclick=closeSheet; card.append(close);
+  });
+}
+/* ---------- Tags: manage (Favoriten-/Alle-Bereich, Drag & Drop) ---------- */
+function tagCard(tag){
+  const c=document.createElement('div'); c.className='tagcard'; c.dataset.tag=tag.id;
+  c.innerHTML=`<span class="grip">⣿</span><span class="dot" style="width:11px;height:11px;border-radius:50%;background:${tag.color}"></span>${esc(tag.name)}`
+    +`<span data-e="edit" title="Bearbeiten" style="margin-left:5px;color:var(--sub);cursor:pointer">✎</span>`;
+  c.querySelector('[data-e=edit]').onclick=ev=>{ev.stopPropagation();openTagEditor(tag);};
+  return c;
+}
+function manageTagsFlow(){
+  openSheet(card=>{
+    card.innerHTML='<h2>Tags verwalten</h2>'
+      +'<div class="muted" style="margin:-6px 0 12px">Ziehe Tags zwischen den Bereichen. „Favoriten" erscheinen oben in der Menüleiste. Zum Umbenennen/Färben/Löschen auf ✎ tippen.</div>';
+    const mkZone=(label,pinned)=>{
+      const lab=document.createElement('div'); lab.className='zonelbl'; lab.textContent=label; card.append(lab);
+      const z=document.createElement('div'); z.className='tagzone'; z.dataset.pinned=pinned?'1':'0'; card.append(z);
+      const tags=S.tags.filter(t=>!!t.pinned===pinned);
+      if(!tags.length){ const e=document.createElement('span'); e.className='muted'; e.textContent='— hierher ziehen —'; z.append(e); }
+      tags.forEach(tag=>z.append(tagCard(tag)));
+      return z;
+    };
+    mkZone('★ Favoriten (in der Menüleiste)',true);
+    mkZone('Alle Tags',false);
+    const nr=document.createElement('div'); nr.className='row newrow'; nr.style.marginTop='6px';
+    nr.innerHTML='<input class="txt" id="ntg" placeholder="Neuer Tag…"><button class="btn" id="addtg">Anlegen</button>';
+    card.append(nr);
+    const mk=()=>{const v=nr.querySelector('#ntg').value.trim();if(!v)return;
+      S.tags.push({id:uid('t'),name:v,color:PALETTE[S.tags.length%PALETTE.length],pinned:false,updatedAt:Date.now()});save();manageTagsFlow();render();};
+    nr.querySelector('#addtg').onclick=mk;
+    const close=document.createElement('div'); close.className='row'; close.style.marginTop='12px';
+    close.innerHTML='<button class="btn" id="dn" style="flex:1">Fertig</button>';
+    close.querySelector('#dn').onclick=closeSheet; card.append(close);
+    setupTagDnD(card); a11y(card);
+  });
+}
+function openTagEditor(tag){
+  openSheet(card=>{
+    card.innerHTML=`<h2>Tag „${esc(tag.name)}"</h2>`;
+    const ed=document.createElement('div'); ed.className='tagedit';
+    ed.innerHTML='<div class="lbl" style="margin:0 0 6px">Name</div><input class="txt" id="tn" value="'+esc(tag.name)+'">'
+      +'<div class="lbl" style="margin:12px 0 6px">Farbe</div><div class="row" id="cols" style="margin:0;gap:7px;flex-wrap:wrap"></div>';
+    card.append(ed);
+    const cols=ed.querySelector('#cols');
+    PALETTE.forEach(col=>{const s=document.createElement('div');s.className='swatch'+(col===tag.color?' sel':'');s.style.background=col;
+      s.onclick=()=>{tag.color=col;tag.updatedAt=Date.now();save();cols.querySelectorAll('.swatch').forEach(x=>x.classList.remove('sel'));s.classList.add('sel');render();};cols.append(s);});
+    const nm=ed.querySelector('#tn');
+    const commit=()=>{const v=nm.value.trim();if(v){tag.name=v;tag.updatedAt=Date.now();save();render();}};
+    nm.addEventListener('change',commit); nm.addEventListener('keydown',e=>{if(e.key==='Enter'){commit();manageTagsFlow();}});
+    const count=Object.values(S.tuneTags).filter(a=>a.includes(tag.id)).length;
+    const info=document.createElement('div'); info.className='muted'; info.style.margin='10px 2px';
+    info.textContent=count+' Stück'+(count===1?'':'e')+' mit diesem Tag · '+(tag.pinned?'Favorit (Menüleiste)':'nicht angeheftet'); card.append(info);
+    const r=document.createElement('div'); r.className='row'; r.style.marginTop='8px';
+    r.innerHTML='<span class="danger" id="del">Löschen</span><span style="flex:1"></span><button class="btn" id="bk">Zurück</button>';
+    r.querySelector('#del').onclick=()=>{ if(confirm('Tag „'+tag.name+'" löschen? (Zuordnungen gehen verloren)')){
+      S.tags=S.tags.filter(x=>x.id!==tag.id);
+      for(const k in S.tuneTags){S.tuneTags[k]=S.tuneTags[k].filter(id=>id!==tag.id);if(!S.tuneTags[k].length)delete S.tuneTags[k];}
+      S.tagFilter.delete(tag.id); if(S.view==='tag:'+tag.id)S.view='all';
+      save();manageTagsFlow();render();}};
+    r.querySelector('#bk').onclick=manageTagsFlow;
+    card.append(r); a11y(card);
+  });
+}
+function setupTagDnD(card){
+  const zones=[...card.querySelectorAll('.tagzone')]; let d=null;
+  function zoneAt(x,y){ return zones.find(z=>{const r=z.getBoundingClientRect(); return x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;}); }
+  function move(e){ if(!d)return; d.moved=true; const z=zoneAt(e.clientX,e.clientY); zones.forEach(zz=>zz.classList.toggle('over',zz===z)); }
+  function up(e){ if(!d)return; const z=zoneAt(e.clientX,e.clientY);
+    zones.forEach(zz=>zz.classList.remove('over')); d.el.classList.remove('dragging');
+    window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); window.removeEventListener('pointercancel',up);
+    const id=d.id, moved=d.moved; d=null;
+    if(z && moved){ const tag=tagById(id); const want=z.dataset.pinned==='1';
+      if(tag && !!tag.pinned!==want){ tag.pinned=want; tag.updatedAt=Date.now(); save(); manageTagsFlow(); render(); } }
+  }
+  card.querySelectorAll('.tagcard').forEach(el=>{
+    el.addEventListener('pointerdown',e=>{ if(e.target.closest('[data-e=edit]'))return; if(d)return; e.preventDefault();
+      d={el,id:el.dataset.tag,moved:false}; el.classList.add('dragging');
+      window.addEventListener('pointermove',move); window.addEventListener('pointerup',up); window.addEventListener('pointercancel',up); });
+  });
+}
+
+/* ---------- Setlists ---------- */
+function addToSetlistFlow(t){
+  openSheet(card=>{
+    card.innerHTML=`<h2>„${esc(t.t)}" zu Setlist</h2>`;
+    const wrap=document.createElement('div'); wrap.className='row'; wrap.style.flexWrap='wrap';
+    if(!S.sets.length) wrap.innerHTML='<div class="muted">Noch keine Setlist. Erstelle unten eine neue.</div>';
+    S.sets.forEach(st=>{
+      const has=st.items.includes(t.key);
+      const c=document.createElement('div'); c.className='chip'+(has?' active':'');
+      c.innerHTML=(has?'✓ ':'')+esc(st.name)+' <span class="muted">('+st.items.length+')</span>';
+      c.onclick=()=>{ if(has) st.items=st.items.filter(k=>k!==t.key); else st.items.push(t.key); st.updatedAt=Date.now(); save(); addToSetlistFlow(t); render(); };
+      wrap.append(c);
+    });
+    card.append(wrap);
+    const nr=document.createElement('div'); nr.className='row newrow';
+    nr.innerHTML='<input class="txt" id="newSet" placeholder="Neue Setlist…"><button class="btn" id="mk">Anlegen</button>';
+    card.append(nr);
+    nr.querySelector('#mk').onclick=()=>{const v=nr.querySelector('#newSet').value.trim();if(!v)return;
+      S.sets.push({id:uid('s'),name:v,items:[t.key],updatedAt:Date.now()}); save(); addToSetlistFlow(t); render();};
+    const close=document.createElement('div'); close.className='row'; close.style.marginTop='14px';
+    close.innerHTML='<button class="btn" id="dn" style="flex:1">Fertig</button>';
+    close.querySelector('#dn').onclick=closeSheet; card.append(close);
+  });
+}
+/* ---------- Zuletzt gespielt ---------- */
+function setRecentSort(col){
+  if(S.recentSort.by===col){ S.recentSort.dir = S.recentSort.dir==='asc'?'desc':'asc'; }
+  else { S.recentSort.by=col; S.recentSort.dir = (col==='name'?'asc':'desc'); }
+  render();
+}
+function recentRow(t,ts){
+  const li=document.createElement('li'); li.className='tune'; li.dataset.key=t.key;
+  const star=S.fav.has(t.key), prac=S.prac.has(t.key);
+  const tt=tuneTagIds(t.key); const hasTags=tt.length>0;
+  const pillsHTML = hasTags? '<div class="tagpills">'+tt.map(id=>{const tg=tagById(id);return tg?`<span class="pill" style="color:${tg.color};border-color:${tg.color};background:${tg.color}22">${esc(tg.name)}</span>`:''}).join('')+'</div>':'';
+  const inSets=S.sets.filter(st=>st.items.includes(t.key)).map(st=>st.name);
+  const setsHTML = inSets.length? `<div class="meta" style="color:#9bbef0">🎵 ${inSets.map(esc).join(', ')}</div>`:'';
+  const d=new Date(ts);
+  const dateStr=d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'})+', '+d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+  li.innerHTML=`
+    <div class="main">
+      <div class="title">${esc(t.t)}</div>
+      <div class="meta">${t.c?esc(t.c)+' · ':''}<span class="book">${esc(bookName(t))}</span>${t.isEdit?'':' · S. '+esc(t.pg)}</div>
+      ${setsHTML}${pillsHTML}
+      <div class="meta" style="color:#7f97ad">🕒 zuletzt: ${dateStr}</div>
+    </div>
+    <div class="iconbtn ${hasTags?'on-tag':''}" data-a="tag" title="Tags">🏷</div>
+    <div class="iconbtn add" data-a="set" title="Zu Setlist">＋</div>
+    <div class="iconbtn ${prac?'on-prac':''}" data-a="prac" title="Üben">${metroIcon(prac)}</div>
+    <div class="iconbtn ${star?'on-star':''}" data-a="star" title="Favorit">${star?'★':'☆'}</div>`;
+  li.querySelector('.main').onclick=()=>openViewer(t);
+  li.querySelector('[data-a=tag]').onclick=()=>assignTagsFlow(t);
+  li.querySelector('[data-a=set]').onclick=()=>addToSetlistFlow(t);
+  li.querySelector('[data-a=prac]').onclick=()=>toggle(S.prac,t.key);
+  li.querySelector('[data-a=star]').onclick=()=>toggle(S.fav,t.key);
+  li.prepend(selBox(t.key)); if(S.selection.has(t.key)) li.classList.add('selected');
+  return li;
+}
+function renderRecent(main){
+  const entries=Object.keys(S.recent).map(k=>({t:byKey[k],ts:S.recent[k]})).filter(x=>x.t);
+  const {by,dir}=S.recentSort;
+  entries.sort((a,b)=>{ let c = (by==='name') ? norm(a.t.t).localeCompare(norm(b.t.t)) : (a.ts-b.ts); return dir==='asc'?c:-c; });
+  const arrow=col=> by===col ? (dir==='asc'?' ▲':' ▼') : '';
+  const head=document.createElement('div'); head.className='controls'; head.style.padding='12px 8px';
+  head.innerHTML=`<h2 style="margin:2px 2px 8px;font-size:20px">🕒 Zuletzt gespielt</h2>
+    <div class="row" style="gap:16px;align-items:center">
+      <span class="muted">Sortieren:</span>
+      <span class="link" id="sName">Name${arrow('name')}</span>
+      <span class="link" id="sDate">Datum${arrow('date')}</span>
+      <span class="muted" style="margin-left:auto">${entries.length} Stück${entries.length===1?'':'e'}</span>
+    </div>`;
+  main.append(head);
+  head.querySelector('#sName').onclick=()=>setRecentSort('name');
+  head.querySelector('#sDate').onclick=()=>setRecentSort('date');
+  if(!entries.length){ main.insertAdjacentHTML('beforeend','<div class="empty">Noch keine Stücke gespielt.<br>Öffne ein Stück – danach erscheint es hier.</div>'); return; }
+  LISTNAV=entries.map(x=>x.t.key);
+  main.append(selectAllRow(entries.map(x=>x.t.key)));
+  const ul=document.createElement('ul'); ul.className='list'; main.append(ul);
+  entries.forEach(({t,ts})=>ul.append(recentRow(t,ts)));
+}
+function renderSets(main){
+  if(S.openSet){ return renderOneSet(main); }
+  const bar=document.createElement('div'); bar.className='controls'; bar.style.padding='12px 8px';
+  bar.innerHTML='<div class="row newrow"><input class="txt" id="nS" placeholder="Neue Setlist…"><button class="btn" id="mkS">Anlegen</button></div>';
+  main.append(bar);
+  bar.querySelector('#mkS').onclick=()=>{const v=bar.querySelector('#nS').value.trim();if(!v)return;
+    S.sets.push({id:uid('s'),name:v,items:[],updatedAt:Date.now()});save();render();};
+  if(!S.sets.length){main.insertAdjacentHTML('beforeend','<div class="empty">Noch keine Setlists.<br>Tippe bei einem Stück auf ＋.</div>');return;}
+  const ul=document.createElement('ul'); ul.className='list'; main.append(ul);
+  S.sets.forEach(st=>{
+    const li=document.createElement('li'); li.className='tune';
+    li.innerHTML=`<div class="main"><div class="title">${esc(st.name)}</div>
+      <div class="meta">${st.items.length} Stück${st.items.length===1?'':'e'}</div></div>
+      <div class="iconbtn" data-a="open">›</div>`;
+    li.querySelector('.main').onclick=li.querySelector('[data-a=open]').onclick=()=>{S.openSet=st.id;render();};
+    ul.append(li);
+  });
+}
+function renderOneSet(main){
+  const st=S.sets.find(s=>s.id===S.openSet); if(!st){S.openSet=null;return render();}
+  const head=document.createElement('div'); head.className='controls'; head.style.padding='12px 8px';
+  head.innerHTML=`<div class="row"><span class="link" id="back">‹ Setlists</span></div>
+    <h2 style="margin:4px 2px;font-size:20px">${esc(st.name)} <span class="muted">(${st.items.length})</span></h2>
+    <div class="row">
+      <button class="btn" id="playAll" ${st.items.length?'':'disabled'}>▶ Durchblättern</button>
+      <button class="btn ghost" id="shareAll" ${st.items.length?'':'disabled'}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg> Teilen</button>
+      <button class="btn ghost" id="printAll" ${st.items.length?'':'disabled'}>🖨 Drucken</button>
+      <span class="danger" id="del" style="margin-left:auto">Löschen</span>
+    </div><div class="muted" style="padding:0 2px">Zum Sortieren am Griff ⣿ ziehen.</div>`;
+  main.append(head);
+  head.querySelector('#back').onclick=()=>{S.openSet=null;render();};
+  head.querySelector('#del').onclick=()=>{if(confirm('Setlist löschen?')){S.sets=S.sets.filter(s=>s.id!==st.id);S.openSet=null;save();render();}};
+  head.querySelector('#playAll').onclick=()=>playSequence(st);
+  head.querySelector('#shareAll').onclick=()=>shareSetlist(st);
+  head.querySelector('#printAll').onclick=()=>printSetlist(st);
+  if(!st.items.length){main.insertAdjacentHTML('beforeend','<div class="empty">Leer. Füge Stücke über ＋ hinzu.</div>');LISTNAV=[];return;}
+  LISTNAV=st.items.filter(k=>byKey[k]);
+  main.append(selectAllRow(st.items.filter(k=>byKey[k])));
+  const ul=document.createElement('ul'); ul.className='list'; ul.id='setUL'; main.append(ul);
+  st.items.forEach((k,i)=>{
+    const t=byKey[k]; if(!t)return;
+    const li=document.createElement('li'); li.className='tune'; li.dataset.key=k;
+    li.innerHTML=`<div class="handle" title="Ziehen zum Sortieren">⣿</div>
+      <div class="main"><div class="title">${i+1}. ${esc(t.t)}</div>
+      <div class="meta">${t.c?esc(t.c)+' · ':''}${esc(bookName(t))} · S. ${esc(t.pg)}</div></div>
+      <div class="iconbtn" data-a="rm">✕</div>`;
+    li.querySelector('.main').onclick=()=>openViewer(t);
+    li.querySelector('[data-a=rm]').onclick=()=>{st.items.splice(i,1);st.updatedAt=Date.now();save();render();};
+    li.prepend(selBox(k)); if(S.selection.has(k)) li.classList.add('selected');
+    enableDrag(li, st); ul.append(li);
+  });
+}
+let drag=null;
+function enableDrag(li, st){
+  const h=li.querySelector('.handle');
+  h.addEventListener('pointerdown',e=>{e.preventDefault();if(drag)return;
+    drag={li,st,h};li.classList.add('dragging');h.style.cursor='grabbing';
+    window.addEventListener('pointermove',onDragMove);window.addEventListener('pointerup',onDragEnd);window.addEventListener('pointercancel',onDragEnd);});
+}
+function onDragMove(e){if(!drag)return;e.preventDefault();
+  const li=drag.li,ul=li.parentElement,y=e.clientY;
+  const sib=[...ul.children].filter(x=>x!==li);let placed=false;
+  for(const s of sib){const r=s.getBoundingClientRect();if(y<r.top+r.height/2){ul.insertBefore(li,s);placed=true;break;}}
+  if(!placed)ul.appendChild(li);}
+function onDragEnd(){if(!drag)return;const li=drag.li,ul=li.parentElement;
+  li.classList.remove('dragging');drag.h.style.cursor='grab';
+  drag.st.items=[...ul.children].map(x=>x.dataset.key);drag.st.updatedAt=Date.now();
+  window.removeEventListener('pointermove',onDragMove);window.removeEventListener('pointerup',onDragEnd);window.removeEventListener('pointercancel',onDragEnd);
+  drag=null;save();render();}
+function playSequence(st){
+  const items=st.items.filter(k=>byKey[k]); if(!items.length)return;
+  LISTNAV=items.slice(); openViewer(byKey[items[0]]);
+}
+function printSetlist(st){
+  const items=st.items.map(k=>byKey[k]).filter(Boolean);
+  const list=items.map((t,i)=>`<div style="padding:4px 0"><b>${i+1}. ${esc(t.t)}</b> — ${t.c?esc(t.c)+', ':''}${esc(t.b)}, S. ${esc(t.pg)}</div>`).join('');
+  const embeds=items.map(t=>`<div style="page-break-after:always"><embed src="${encodeURI(t.f)}" type="application/pdf" width="100%" height="1000px"></div>`).join('');
+  const w=window.open('','_blank');
+  w.document.write(`<html><head><title>${esc(st.name)}</title></head><body style="font-family:sans-serif"><h2>${esc(st.name)}</h2>${list}<hr>${embeds}<script>setTimeout(()=>window.print(),900)<\/script></body></html>`);
+  w.document.close();
+}
+
+/* ---------- sheet / events ---------- */
+function openSheet(b){const s=document.getElementById('sheet');b(document.getElementById('sheetCard'));s.classList.add('open');a11y(document.getElementById('sheetCard'));}
+function closeSheet(){document.getElementById('sheet').classList.remove('open');}
+document.getElementById('sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeSheet();});
+document.getElementById('q').addEventListener('input',e=>{S.q=e.target.value;render();});
+
+/* Enter/Space = Klick für eigene Bedien-Elemente; alle fokussierbar machen */
+const CLICKABLE='.tab,.fchip,.chip,.iconbtn,.link,.handle,.swatch,.tagcard,.collapse-h,.brand,.danger,.pen';
+function a11y(root){ (root||document).querySelectorAll(CLICKABLE).forEach(el=>{
+  if(!el.hasAttribute('tabindex')) el.tabIndex=0;
+  if(!el.hasAttribute('role')) el.setAttribute('role','button'); }); }
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter' && e.key!==' ') return;
+  const el=document.activeElement; if(!el||el===document.body) return;
+  const tag=el.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||tag==='BUTTON') return;
+  if(el.matches && el.matches(CLICKABLE)){ e.preventDefault(); el.click(); }
+});
+document.addEventListener('keydown',e=>{ if(e.key!=='Enter') return;
+  const inp=e.target;
+  if(inp && inp.matches && inp.matches('.newrow input')){
+    const btn=inp.closest('.newrow').querySelector('.btn'); if(btn){ e.preventDefault(); btn.click(); } }
+});
+document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return;
+  const viewer=document.getElementById('viewer');
+  if(viewer.classList.contains('fullscreen')){ exitFullscreen(); return; }
+  if(document.getElementById('sheet').classList.contains('open')){ closeSheet(); return; }
+  if(viewer.classList.contains('open')){ document.getElementById('vClose').click(); }
+});
+
+/* ---------- Daten & Offline (Export / Import / PWA) ---------- */
+function exportData(){
+  const data={schema:1, app:'realbook', exportedAt:new Date().toISOString(),
+    fav:[...S.fav], prac:[...S.prac], sets:S.sets, tags:S.tags, tuneTags:S.tuneTags};
+  const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  const d=new Date(); const stamp=d.toISOString().slice(0,10);
+  a.download='realbook-daten-'+stamp+'.json'; document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function mergeState(obj){
+  if(!obj||typeof obj!=='object') throw new Error('Ungültige Datei');
+  (obj.fav||[]).forEach(k=>S.fav.add(k));
+  (obj.prac||[]).forEach(k=>S.prac.add(k));
+  const setById=Object.fromEntries(S.sets.map(s=>[s.id,s]));
+  (obj.sets||[]).forEach(s=>{const ex=setById[s.id];
+    if(!ex){S.sets.push(s);setById[s.id]=s;} else if((s.updatedAt||0)>(ex.updatedAt||0)){Object.assign(ex,s);}});
+  const tagById2=Object.fromEntries(S.tags.map(t=>[t.id,t]));
+  (obj.tags||[]).forEach(t=>{const ex=tagById2[t.id];
+    if(!ex){S.tags.push(t);tagById2[t.id]=t;} else if((t.updatedAt||0)>(ex.updatedAt||0)){Object.assign(ex,t);}});
+  const inTags=id=>S.tags.some(t=>t.id===id);
+  for(const k in (obj.tuneTags||{})){const cur=new Set(S.tuneTags[k]||[]);
+    obj.tuneTags[k].forEach(id=>cur.add(id));
+    const arr=[...cur].filter(inTags); if(arr.length)S.tuneTags[k]=arr; else delete S.tuneTags[k];}
+  save(); render();
+}
+function importData(file){
+  const r=new FileReader();
+  r.onload=()=>{ try{ const obj=JSON.parse(r.result);
+      const before={sets:S.sets.length,tags:S.tags.length};
+      mergeState(obj);
+      alert('Import zusammengeführt.\nSetlists: '+before.sets+' → '+S.sets.length+'\nTags: '+before.tags+' → '+S.tags.length);
+      closeSheet();
+    }catch(e){ alert('Import fehlgeschlagen: '+e.message); } };
+  r.readAsText(file);
+}
+let precacheState={running:false,done:0,total:0};
+navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', e=>{
+  const m=e.data||{};
+  if(m.type==='PRECACHE_PROGRESS'){precacheState={running:true,done:m.done,total:m.total}; updatePrecacheUI();}
+  if(m.type==='PRECACHE_DONE'){precacheState={running:false,done:m.total,total:m.total}; updatePrecacheUI(true);}
+});
+function updatePrecacheUI(done){
+  const el=document.getElementById('precacheStatus'); if(!el)return;
+  if(done) el.textContent='✓ Alle '+precacheState.total+' Noten sind offline gespeichert.';
+  else el.textContent='Speichere… '+precacheState.done+' / '+precacheState.total;
+}
+function precacheAll(){
+  if(!('serviceWorker' in navigator) || !navigator.serviceWorker.controller){
+    alert('Offline-Speicher ist erst nach der Installation (bzw. einem Neuladen der Seite) aktiv.'); return; }
+  precacheState={running:true,done:0,total:TUNES.length}; updatePrecacheUI();
+  navigator.serviceWorker.controller.postMessage({type:'PRECACHE_ALL', urls:TUNES.map(t=>t.f)});
+}
+function openDataSheet(){
+  openSheet(card=>{
+    card.innerHTML=`<h2>Daten & Offline</h2>
+      <div class="muted" style="margin:-6px 0 14px">Deine Setlists, Tags, Favoriten & Üben-Liste. Noten selbst sind immer lokal.</div>`;
+    const r1=document.createElement('div'); r1.className='row';
+    r1.innerHTML='<button class="btn" id="exp" style="flex:1">⬇︎ Daten exportieren</button>'
+      +'<button class="btn ghost" id="imp" style="flex:1">⬆︎ Daten importieren</button>'
+      +'<input type="file" id="impFile" accept="application/json,.json" style="display:none">';
+    card.append(r1);
+    card.insertAdjacentHTML('beforeend','<div class="muted" style="margin:2px 2px 14px">Import wird <b>zusammengeführt</b> (nichts wird gelöscht; bei Konflikten gewinnt der neuere Stand).</div>');
+    const rn=document.createElement('div'); rn.style.cssText='border-top:1px solid var(--line);padding-top:14px';
+    rn.innerHTML='<div class="lbl" style="margin:0 0 8px">Dein Name (für Notizen)</div>'
+      +'<input class="txt" id="editorName" placeholder="z. B. Jens" value="'+esc(getEditorName())+'">'
+      +'<div class="muted" style="margin-top:6px">Wird als „Bearbeitet von" an deine handschriftlichen Notizen gehängt (der Browser kann den System-Anmeldenamen nicht auslesen).</div>';
+    card.append(rn);
+    rn.querySelector('#editorName').onchange=e=>setEditorName(e.target.value.trim());
+    const rs=document.createElement('div'); rs.style.cssText='border-top:1px solid var(--line);padding-top:14px;margin-top:14px';
+    rs.innerHTML='<div class="lbl" style="margin:0 0 8px">Kategorie „Sonstiges Material"</div>'
+      +'<div class="row" style="margin:0"><div class="chip'+(S.sonstOn?' active':'')+'" id="sonstTog">'+(S.sonstOn?'✓ ':'')+'In Listen anzeigen</div></div>'
+      +'<div class="muted" style="margin-top:6px">Enthält deine bearbeiteten (und künftig hochgeladenen) Stücke. Als eigenes „Buch" auswählbar. Standardmäßig eingeschaltet.</div>';
+    card.append(rs);
+    rs.querySelector('#sonstTog').onclick=()=>{ S.sonstOn=!S.sonstOn; localStorage.setItem('rb_sonston',S.sonstOn?'1':'0'); openDataSheet(); render(); };
+    const r2=document.createElement('div'); r2.style.cssText='border-top:1px solid var(--line);padding-top:14px;margin-top:14px';
+    r2.innerHTML='<div class="lbl" style="margin:0 0 8px">Offline aufs Gerät</div>'
+      +'<button class="btn ghost" id="pre" style="width:100%">⤓ Alle Noten offline speichern</button>'
+      +'<div class="muted" id="precacheStatus" style="margin-top:8px"></div>';
+    card.append(r2);
+    card.insertAdjacentHTML('beforeend','<div class="muted" style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px">'
+      +'<b>Als App installieren:</b> iPad/iPhone in Safari öffnen → Teilen-Symbol → „Zum Home-Bildschirm". '
+      +'Am Mac: in Safari/Chrome über das Teilen- bzw. Installations-Symbol in der Adresszeile.</div>');
+    const close=document.createElement('div'); close.className='row'; close.style.marginTop='14px';
+    close.innerHTML='<button class="btn" id="dn" style="flex:1">Fertig</button>'; card.append(close);
+    r1.querySelector('#exp').onclick=exportData;
+    r1.querySelector('#imp').onclick=()=>r1.querySelector('#impFile').click();
+    r1.querySelector('#impFile').onchange=e=>{ if(e.target.files[0]) importData(e.target.files[0]); };
+    r2.querySelector('#pre').onclick=precacheAll;
+    close.querySelector('#dn').onclick=closeSheet;
+    if(precacheState.total) updatePrecacheUI(!precacheState.running);
+  });
+}
+document.getElementById('settingsBtn').onclick=openDataSheet;
+
+/* ============ PDF.js, sticky search, fit view, annotation ============ */
+if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='vendor/pdfjs/pdf.worker.min.js';
+
+/* keep search area visible: pin controls just below the header */
+(function(){
+  const header=document.querySelector('header'), controls=document.getElementById('controls');
+  function sync(){ controls.style.top=(header.offsetHeight-1)+'px'; }
+  if(window.ResizeObserver) new ResizeObserver(sync).observe(header);
+  window.addEventListener('resize',sync); sync(); setTimeout(sync,300);
+})();
+
+function getEditorName(){ return localStorage.getItem('rb_editor')||''; }
+function setEditorName(v){ localStorage.setItem('rb_editor', v||''); }
+
+/* ---- fit layout ---- */
+function computeFit(n,natW,natH,W,H,gap){
+  if(n<=2){ const s=Math.min(H/natH,(W-gap*(n-1))/(n*natW)); return {scale:Math.max(s,0.05),center:true}; }
+  return {scale:Math.max(H/natH,0.05),center:false};
+}
+const _pdfCache={};
+async function loadPdf(url){
+  if(_pdfCache[url])return _pdfCache[url];
+  // Bytes selbst holen und an PDF.js geben – robuster in Safari & mit Service Worker als getDocument(url)
+  const buf=await (await fetch(encodeURI(url))).arrayBuffer();
+  const doc=await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+  _pdfCache[url]=doc; return doc;
+}
+async function renderPdfFit(t){
+  const fit=document.getElementById('vFit'); fit.classList.remove('center');
+  fit.innerHTML='<div style="color:#e6eef6;margin:auto">Lädt…</div>';
+  try{
+    const doc=await loadPdf(t.f); const n=doc.numPages;
+    const p1=await doc.getPage(1); const v1=p1.getViewport({scale:1});
+    const fsMode=document.getElementById('viewer').classList.contains('fullscreen');
+    const box=fit.getBoundingClientRect();
+    const W=(fsMode?window.innerWidth:(box.width||window.innerWidth))-24;
+    const H=(fsMode?window.innerHeight:(box.height||window.innerHeight))-20;
+    const {scale,center}=computeFit(n,v1.width,v1.height,W,H,14);
+    fit.classList.toggle('center',center); fit.innerHTML='';
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    for(let i=1;i<=n;i++){ const page=await doc.getPage(i); const vp=page.getViewport({scale:scale*dpr});
+      const cvs=document.createElement('canvas'); cvs.className='pg';
+      cvs.width=Math.round(vp.width); cvs.height=Math.round(vp.height);
+      cvs.style.width=(vp.width/dpr)+'px'; cvs.style.height=(vp.height/dpr)+'px';
+      fit.append(cvs); await page.render({canvasContext:cvs.getContext('2d'),viewport:vp}).promise; }
+  }catch(e){
+    /* Fallback: PDF.js nicht verfügbar → native Anzeige, aber per Iframe-Breite auf die HÖHE eingepasst.
+       Iframe-Breite = Seitenbreite bei voller Höhe → der native Betrachter (view=FitH) füllt die Höhe. */
+    const frame=document.getElementById('vFrame'), holder=frame.parentElement;
+    fit.style.display='none'; fit.innerHTML='';
+    const H=window.innerHeight, W=window.innerWidth, ratio=0.773; // Hochformat (US-Letter)
+    const iw=Math.min(W, Math.round(H*ratio));
+    holder.style.display='flex'; holder.style.justifyContent='center'; holder.style.overflow='hidden';
+    frame.style.display='block'; frame.style.width=iw+'px'; frame.style.height='100%'; frame.style.margin='0 auto';
+    frame.src=encodeURI(t.f)+'#toolbar=0&navpanes=0&view=FitH';
+  }
+}
+function resetFrameStyle(){
+  const frame=document.getElementById('vFrame'), holder=frame.parentElement;
+  frame.style.width=''; frame.style.height=''; frame.style.margin='';
+  holder.style.display=''; holder.style.justifyContent=''; holder.style.overflow='';
+}
+function loadImg(src){ return new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=src; }); }
+async function renderUserFit(t){
+  const fit=document.getElementById('vFit'); fit.classList.remove('center');
+  fit.innerHTML='<div style="color:#e6eef6;margin:auto">Lädt…</div>';
+  const pages=await idbGetPages(t.key);
+  if(!pages.length){ fit.innerHTML='<div style="color:#e6eef6;margin:auto">Keine Seiten gespeichert.</div>'; return; }
+  const probe=await loadImg(pages[0]); const natW=probe.naturalWidth,natH=probe.naturalHeight;
+  const box=fit.getBoundingClientRect(); const W=box.width-24,H=box.height-20;
+  const {scale,center}=computeFit(pages.length,natW,natH,W,H,14);
+  fit.classList.toggle('center',center); fit.innerHTML='';
+  pages.forEach(src=>{ const im=new Image(); im.className='pg'; im.src=src;
+    im.style.width=(natW*scale)+'px'; im.style.height=(natH*scale)+'px'; fit.append(im); });
+}
+function printImages(t){ idbGetPages(t.key).then(pages=>{
+  const imgs=pages.map(d=>`<div style="page-break-after:always"><img src="${d}" style="max-width:100%"></div>`).join('');
+  const w=window.open('','_blank'); w.document.write(`<html><head><title>${esc(t.t)}</title></head><body style="margin:0">${imgs}<script>setTimeout(()=>window.print(),600)<\/script></body></html>`); w.document.close();
+});}
+let _rz; window.addEventListener('resize',()=>{ clearTimeout(_rz); _rz=setTimeout(()=>{
+  if(document.getElementById('viewer').classList.contains('open')&&CURRENT){ if(CURRENT.isEdit)renderUserFit(CURRENT); else if(fitOn)renderPdfFit(CURRENT); }
+},250); });
+
+/* ---- IndexedDB: annotated page images ---- */
+const IDB_DB='realbook', IDB_ST='pages';
+function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open(IDB_DB,1);
+  r.onupgradeneeded=()=>{ const db=r.result; if(!db.objectStoreNames.contains(IDB_ST)) db.createObjectStore(IDB_ST,{keyPath:'id'}); };
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function idbPutPages(uk,arr){ const db=await idb(); return new Promise((res,rej)=>{ const tx=db.transaction(IDB_ST,'readwrite'),st=tx.objectStore(IDB_ST);
+  arr.forEach((d,i)=>st.put({id:uk+'#'+i,userKey:uk,page:i,data:d})); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
+async function idbGetPages(uk){ const db=await idb(); return new Promise((res,rej)=>{ const tx=db.transaction(IDB_ST,'readonly'),st=tx.objectStore(IDB_ST),out=[],c=st.openCursor();
+  c.onsuccess=e=>{ const cur=e.target.result; if(cur){ if(cur.value.userKey===uk)out.push(cur.value); cur.continue(); } else { out.sort((a,b)=>a.page-b.page); res(out.map(x=>x.data)); } }; c.onerror=()=>rej(c.error); }); }
+async function idbDeletePages(uk){ const db=await idb(); return new Promise(res=>{ const tx=db.transaction(IDB_ST,'readwrite'),st=tx.objectStore(IDB_ST),c=st.openCursor();
+  c.onsuccess=e=>{ const cur=e.target.result; if(cur){ if(cur.value.userKey===uk)cur.delete(); cur.continue(); } else res(); }; }); }
+
+/* ---- Annotation editor ---- */
+const PEN_COLORS=['#111111','#e12d2d','#1560d1','#0a8a3a'];
+let ED=null;
+async function openEditor(t){
+  const stage=document.getElementById('eStage'); stage.innerHTML='<div style="color:#e6eef6;margin:auto">Lädt…</div>';
+  document.getElementById('editor').classList.add('open');
+  document.getElementById('eTitle').value=t.t+' (Edits)';
+  const pens=document.getElementById('ePens'); pens.innerHTML='';
+  PEN_COLORS.forEach((c,i)=>{ const el=document.createElement('div'); el.className='pen'+(i===0?' on':''); el.style.background=c;
+    el.onclick=()=>{ ED.tool='pen'; ED.color=c; document.querySelectorAll('#ePens .pen').forEach(x=>x.classList.remove('on')); el.classList.add('on'); document.getElementById('eErase').classList.remove('on'); };
+    pens.append(el); });
+  const doc=await loadPdf(t.f); const n=doc.numPages;
+  const p1=await doc.getPage(1); const v1=p1.getViewport({scale:1});
+  const R=Math.min(1240/v1.width,2.2);
+  const pages=[];
+  for(let i=1;i<=n;i++){ const page=await doc.getPage(i); const vp=page.getViewport({scale:R});
+    const bg=document.createElement('canvas'); bg.width=Math.round(vp.width); bg.height=Math.round(vp.height);
+    await page.render({canvasContext:bg.getContext('2d'),viewport:vp}).promise; pages.push({bg,w:bg.width,h:bg.height,strokes:[]}); }
+  ED={tune:t,pages,cur:0,tool:'pen',color:PEN_COLORS[0],baseWidth:3.0,drawing:false,penSeen:false,stroke:null,drawC:null};
+  buildPageNav(); showEditorPage(0);
+}
+function buildPageNav(){ const nav=document.getElementById('ePageNav');
+  if(ED.pages.length<=1){ nav.style.display='none'; return; }
+  nav.style.display='flex';
+  nav.innerHTML='<button class="ebtn" id="ePrev">‹</button><span id="ePageLbl" style="color:var(--sub);font-size:13px"></span><button class="ebtn" id="eNext">›</button>';
+  nav.querySelector('#ePrev').onclick=()=>{ if(ED.cur>0)showEditorPage(ED.cur-1); };
+  nav.querySelector('#eNext').onclick=()=>{ if(ED.cur<ED.pages.length-1)showEditorPage(ED.cur+1); };
+}
+function showEditorPage(i){
+  ED.cur=i; const pg=ED.pages[i]; const stage=document.getElementById('eStage'); stage.innerHTML='';
+  const lbl=document.getElementById('ePageLbl'); if(lbl)lbl.textContent=(i+1)+' / '+ED.pages.length;
+  const box=stage.getBoundingClientRect(); const scale=Math.min((box.width-24)/pg.w,(box.height-24)/pg.h,1);
+  const stack=document.createElement('div'); stack.className='estack';
+  stack.style.width=(pg.w*scale)+'px'; stack.style.height=(pg.h*scale)+'px';
+  const bgC=document.createElement('canvas'); bgC.width=pg.w; bgC.height=pg.h; bgC.style.width='100%'; bgC.style.height='100%'; bgC.getContext('2d').drawImage(pg.bg,0,0);
+  const drawC=document.createElement('canvas'); drawC.className='draw'; drawC.width=pg.w; drawC.height=pg.h; drawC.style.width='100%'; drawC.style.height='100%';
+  stack.append(bgC,drawC); stage.append(stack); ED.drawC=drawC; redrawStrokes(); bindDraw(drawC);
+}
+function redrawStrokes(){ const c=ED.drawC,ctx=c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); ED.pages[ED.cur].strokes.forEach(s=>drawStroke(ctx,s)); }
+function drawStroke(ctx,s){
+  ctx.globalCompositeOperation=s.erase?'destination-out':'source-over';
+  ctx.strokeStyle=s.color; ctx.fillStyle=s.color; ctx.lineCap='round'; ctx.lineJoin='round';
+  if(s.pts.length===1){ const p=s.pts[0]; ctx.beginPath(); ctx.arc(p.x,p.y,(s.erase?s.w*2.2:s.w)/2,0,7); ctx.fill(); ctx.globalCompositeOperation='source-over'; return; }
+  for(let i=1;i<s.pts.length;i++){ const a=s.pts[i-1],b=s.pts[i];
+    ctx.lineWidth=s.erase? s.w*2.2 : s.w*(0.5+1.3*(b.p||0.5));
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+  ctx.globalCompositeOperation='source-over';
+}
+function bindDraw(c){
+  const pt=e=>{ const r=c.getBoundingClientRect(); return {x:(e.clientX-r.left)*(c.width/r.width),y:(e.clientY-r.top)*(c.height/r.height),p:(e.pressure&&e.pressure>0)?e.pressure:0.5}; };
+  c.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='pen')ED.penSeen=true;
+    if(ED.penSeen&&e.pointerType==='touch')return;
+    e.preventDefault(); c.setPointerCapture(e.pointerId);
+    const w=ED.baseWidth*(c.width/c.getBoundingClientRect().width);
+    const s={color:ED.color,w,erase:ED.tool==='erase',pts:[pt(e)]};
+    ED.stroke=s; ED.drawing=true; ED.pages[ED.cur].strokes.push(s); redrawStrokes();
+  });
+  c.addEventListener('pointermove',e=>{ if(!ED.drawing||!ED.stroke)return; if(ED.penSeen&&e.pointerType==='touch')return; e.preventDefault(); ED.stroke.pts.push(pt(e)); redrawStrokes(); });
+  const end=()=>{ if(!ED.drawing)return; ED.drawing=false; ED.stroke=null; };
+  c.addEventListener('pointerup',end); c.addEventListener('pointercancel',end);
+}
+document.getElementById('eErase').onclick=()=>{ if(!ED)return; ED.tool=ED.tool==='erase'?'pen':'erase'; document.getElementById('eErase').classList.toggle('on',ED.tool==='erase'); };
+document.getElementById('eUndo').onclick=()=>{ if(!ED)return; ED.pages[ED.cur].strokes.pop(); redrawStrokes(); };
+document.getElementById('eCancel').onclick=()=>{ document.getElementById('editor').classList.remove('open'); ED=null; };
+document.getElementById('eSave').onclick=async()=>{
+  if(!ED)return;
+  const name=getEditorName();
+  const title=(document.getElementById('eTitle').value.trim())||(ED.tune.t+' (Edits)');
+  const uk='user|'+uid('u');
+  const dataURLs=ED.pages.map(pg=>{ const out=document.createElement('canvas'); out.width=pg.w; out.height=pg.h;
+    const ctx=out.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,pg.w,pg.h); ctx.drawImage(pg.bg,0,0);
+    pg.strokes.forEach(s=>drawStroke(ctx,s)); return out.toDataURL('image/png'); });
+  await idbPutPages(uk,dataURLs);
+  USER.push({key:uk,t:title,editor:name,editedAt:Date.now(),isEdit:true,book:ED.tune.b,bid:'user',baseKey:ED.tune.key,np:ED.pages.length,c:'',pg:'Notiz'});
+  saveUser();
+  document.getElementById('editor').classList.remove('open'); ED=null; render();
+  alert('Notiz gespeichert.'+(name?'':' Tipp: trage im ⚙︎-Menü deinen Namen ein, damit du deine Edits leichter wiederfindest.'));
+};
+
+/* Hinweis, wenn per Doppelklick (file://) geöffnet – dann kann der Browser die Noten nicht einpassen */
+if(location.protocol==='file:'){
+  const d=document.createElement('div'); d.className='filebanner';
+  d.innerHTML='<div>⚠︎ <b>Per Doppelklick geöffnet.</b> So darf der Browser die Noten nicht laden/einpassen '
+    +'(Seite zu groß, Scrollen nötig). Starte die App über <b>„Realbook starten.command"</b> im App-Ordner '
+    +'(Doppelklick) – oder im Terminal: <code>python3 -m http.server 8777</code>, dann <b>http://localhost:8777</b>. '
+    +'Auf dem iPad bzw. über die gehostete/installierte App funktioniert alles automatisch.</div>'
+    +'<span class="x" title="Ausblenden">✕</span>';
+  d.querySelector('.x').onclick=()=>d.remove();
+  document.body.appendChild(d);
+}
+/* register service worker (offline / installable) + Auto-Update:
+   sobald eine neue Version aktiv wird, die Seite einmal automatisch neu laden. */
+if('serviceWorker' in navigator){
+  let _swReloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(_swReloaded)return; _swReloaded=true; location.reload(); });
+  window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').then(r=>{ try{ r.update(); }catch(e){} }).catch(()=>{}); });
+}
+
+render();
+</script>
+</body>
+</html>
