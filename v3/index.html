@@ -429,7 +429,7 @@ function currentList(){
   else if(S.view==='prac') list=list.filter(t=>S.prac.has(t.key));
   else if(S.view==='edited'){ list=list.filter(t=>t.isEdit); list.sort((a,b)=>(b.editedAt||0)-(a.editedAt||0)); return list; }
   else if(S.view.startsWith('tag:')){const id=S.view.slice(4); list=list.filter(t=>tuneTagIds(t.key).includes(id));}
-  list.sort((a,b)=>norm(a.t).localeCompare(norm(b.t))|| a.b.localeCompare(b.b));
+  list.sort((a,b)=>norm(a.t).localeCompare(norm(b.t))|| (a.b||bookName(a)||'').localeCompare(b.b||bookName(b)||''));
   return list;
 }
 
@@ -1653,7 +1653,7 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-19 · Import v1';
+const APP_BUILD='2026-07-19 · Import v2';
 (function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
