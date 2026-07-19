@@ -96,7 +96,7 @@
   .viewer .frame{flex:1;background:#525659}
   .viewer iframe{width:100%;height:100%;border:none;background:#525659}
 
-  .sheet{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:none}
+  .sheet{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:85;display:none}
   .sheet.open{display:block}
   .sheet .card{position:absolute;left:0;right:0;bottom:0;max-height:88%;overflow:auto;
     background:var(--panel);border-top-left-radius:20px;border-top-right-radius:20px;
@@ -275,6 +275,7 @@
     <div id="seqnav" style="display:none;gap:6px"></div>
     <button class="btn ghost" id="vFitBtn" title="Vollbild – ganze Seite, ohne Menüs">⛶ Vollbild</button>
     <button class="btn ghost" id="vEditBtn" title="Handschriftliche Notiz">✏️ Notiz</button>
+    <button class="btn ghost" id="vMetaBtn" title="Titel &amp; Komponist korrigieren" style="display:none">✎ Titel</button>
     <button class="btn ghost" id="vShare" title="Teilen (Apple Share)"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg> Teilen</button>
     <button class="btn ghost" id="vPrint" title="Drucken">🖨 Drucken</button>
     <button class="btn ghost" id="vTab">↗</button>
@@ -316,6 +317,7 @@
 <div class="sheet" id="sheet"><div class="card" id="sheetCard"></div></div>
 
 <script src="vendor/pdfjs/pdf.min.js"></script>
+<script src="vendor/jszip/jszip.min.js"></script>
 <script src="data.js"></script>
 <script>
 const PALETTE=['#e0662b','#2b7de0','#57c98b','#c94ad1','#e0b93a','#4ab5c9','#e0506b','#8b7de0','#7bc043','#d98cae'];
@@ -335,7 +337,24 @@ const S = {
   booksOpen: localStorage.getItem('rb_booksopen')==='1',
   azOpen: localStorage.getItem('rb_azopen')==='1',
 };
-const TUNES = window.TUNES.map((t,i)=>({...t, key:t.bid+'|'+t.t+'|'+t.pg, idx:i}));
+/* Metadaten-Korrektur der Großsammlung: Overrides je Stück (Titel/Komponist), PDFs bleiben unberührt.
+   Schlüssel = ursprüngliche Identität (bid|Originaltitel|Seite), damit er auch nach Umbenennen stabil bleibt. */
+const OVERRIDES = JSON.parse(localStorage.getItem('rb_overrides')||'{}');
+function saveOverrides(){ localStorage.setItem('rb_overrides', JSON.stringify(OVERRIDES)); }
+const TUNES = window.TUNES.map((t,i)=>{
+  const key=t.bid+'|'+t.t+'|'+t.pg; const o=OVERRIDES[key];
+  const base={...t, key, idx:i, _ot:t.t, _oc:t.c||''};
+  if(o){ if(typeof o.t==='string' && o.t) base.t=o.t; if(typeof o.c==='string') base.c=o.c; }
+  return base;
+});
+function applyOverride(key, patch){
+  const t=byKey[key]; if(!t) return;
+  const o=Object.assign({}, OVERRIDES[key]);
+  if('t' in patch){ const v=(patch.t||'').trim(); if(v && v!==t._ot){ o.t=v; t.t=v; } else { delete o.t; t.t=t._ot; } }
+  if('c' in patch){ const v=(patch.c||'').trim(); if(v!==(t._oc||'')){ o.c=v; t.c=v; } else { delete o.c; t.c=t._oc; } }
+  if(Object.keys(o).length) OVERRIDES[key]=o; else delete OVERRIDES[key];
+  saveOverrides(); rebuildByKey(); render();
+}
 let USER = JSON.parse(localStorage.getItem('rb_usertunes')||'[]');  // annotated copies (metadata; page images in IndexedDB)
 let LIBTUNES = [];   // eigene importierte PDFs (Metadaten + Blob in IndexedDB, Store 'libtunes')
 let USERBOOKS = JSON.parse(localStorage.getItem('rb_userbooks')||'[]'); // [{bid,name,chip,createdAt}]
@@ -724,6 +743,9 @@ function openViewer(t, keepNav){
   document.getElementById('vFitBtn').classList.remove('on');
   document.getElementById('vFitBtn').style.display='flex';
   document.getElementById('vEditBtn').style.display = t.isEdit ? 'none':'flex';
+  const vMeta=document.getElementById('vMetaBtn');
+  vMeta.style.display = (!t.isEdit && !t.isLib) ? 'flex':'none';   // Metadaten-Korrektur nur für die Großsammlung
+  vMeta.onclick=()=>openMetaSheet(t);
   document.getElementById('vShare').onclick=()=>shareTune(t);
   document.getElementById('vPrint').onclick=()=>printCurrent(t);
   if(t.isEdit){
@@ -1419,12 +1441,91 @@ function openLibrarySheet(){
       });
       card.append(sec);
     });
+    // Sammlungspaket sichern / einlesen
+    const pkg=document.createElement('div'); pkg.style.cssText='border-top:1px solid var(--line);padding-top:14px;margin-top:14px';
+    pkg.innerHTML='<div class="lbl" style="margin:0 0 8px">Sammlung sichern &amp; übertragen</div>'
+      +'<div class="row" style="margin:0;gap:8px">'
+      +'<button class="btn ghost" id="pkgExp" style="flex:1">⬇︎ Als Paket sichern</button>'
+      +'<button class="btn ghost" id="pkgImp" style="flex:1">⬆︎ Paket einlesen</button>'
+      +'<input type="file" id="pkgFile" accept=".zip,application/zip" style="display:none"></div>'
+      +'<div class="muted" style="margin-top:6px">Bündelt alle eigenen Bücher samt PDFs in <b>einer</b> Datei – zum Sichern oder auf ein anderes Gerät übertragen. Einlesen führt zusammen (vorhandene Stücke werden übersprungen).</div>';
+    card.append(pkg);
+    pkg.querySelector('#pkgExp').onclick=()=>{ pkg.querySelector('#pkgExp').textContent='… wird erstellt'; exportPackage().finally(()=>{ const el=pkg.querySelector('#pkgExp'); if(el)el.textContent='⬇︎ Als Paket sichern'; }); };
+    pkg.querySelector('#pkgImp').onclick=()=>pkg.querySelector('#pkgFile').click();
+    pkg.querySelector('#pkgFile').onchange=e=>{ if(e.target.files[0]) importPackage(e.target.files[0]); };
     const close=document.createElement('div'); close.className='row'; close.style.marginTop='16px';
     close.innerHTML='<button class="btn" id="libDone" style="flex:1">Fertig</button>'; card.append(close);
     close.querySelector('#libDone').onclick=closeSheet;
   });
 }
 document.getElementById('libBtn').onclick=openLibrarySheet;
+
+/* ---------- Baustein 3a: Metadaten-Korrektur der Großsammlung ---------- */
+function resetOverride(key){ const t=byKey[key]; if(!t) return; delete OVERRIDES[key]; t.t=t._ot; t.c=t._oc; saveOverrides(); rebuildByKey(); render(); }
+function syncViewerTune(key){ if(CURRENT && CURRENT.key===key){ const t=byKey[key]; if(!t) return; CURRENT=t;
+  document.getElementById('vTitle').textContent=t.t;
+  document.getElementById('vSub').textContent=(t.c?t.c+' — ':'')+t.b+', S. '+t.pg; } }
+function openMetaSheet(t){
+  openSheet(card=>{
+    card.innerHTML='<h2>Titel &amp; Komponist</h2><div class="muted" style="margin:-6px 0 14px">'
+      +'Korrigiere die Angaben zu diesem Stück – z. B. einen falschen Komponisten aus der automatischen Ergänzung. '
+      +'Die PDF-Datei bleibt unverändert; die Korrektur gilt nur in dieser App und lässt sich zurücksetzen.</div>';
+    const wrap=document.createElement('div');
+    wrap.innerHTML='<div class="lbl" style="margin:0 0 6px">Titel</div><input class="txt" id="mT" value="'+esc(t.t)+'">'
+      +'<div class="lbl" style="margin:12px 0 6px">Komponist</div><input class="txt" id="mC" value="'+esc(t.c||'')+'" placeholder="(leer lassen für keinen Komponisten)">'
+      +'<div class="muted" style="margin-top:10px">Buch: '+esc(bookName(t))+' · S. '+esc(t.pg)+(OVERRIDES[t.key]?' · <b>korrigiert</b>':'')+'</div>';
+    card.append(wrap);
+    const hasOv=!!OVERRIDES[t.key];
+    const row=document.createElement('div'); row.className='row'; row.style.marginTop='16px';
+    row.innerHTML='<button class="btn" id="mSave" style="flex:2">Speichern</button>'
+      +(hasOv?'<button class="btn ghost" id="mReset" style="flex:1">Zurücksetzen</button>':'')
+      +'<button class="btn ghost" id="mCancel" style="flex:1">Abbrechen</button>';
+    card.append(row);
+    row.querySelector('#mSave').onclick=()=>{ applyOverride(t.key,{t:wrap.querySelector('#mT').value, c:wrap.querySelector('#mC').value}); syncViewerTune(t.key); closeSheet(); };
+    const rb=row.querySelector('#mReset'); if(rb) rb.onclick=()=>{ resetOverride(t.key); syncViewerTune(t.key); closeSheet(); };
+    row.querySelector('#mCancel').onclick=closeSheet;
+  });
+}
+
+/* ---------- Baustein 3b: Sammlungspaket (eigene Noten als eine Datei) ---------- */
+async function exportPackage(){
+  if(!LIBTUNES.length){ alert('Es sind keine eigenen Noten zum Sichern vorhanden.'); return; }
+  const zip=new JSZip(); const tunes=[];
+  for(const t of LIBTUNES){ const r=await libGet(t.libId); if(!r||!r.blob) continue;
+    const file='pieces/'+r.id+'.pdf'; zip.file(file, r.blob);
+    tunes.push({id:r.id,bid:r.bid,title:r.title,composer:r.composer||'',addedAt:r.addedAt||0,np:r.np||1,fileName:r.fileName||'',file}); }
+  const manifest={schema:1, app:'realbook', kind:'collection', exportedAt:new Date().toISOString(),
+    books:USERBOOKS.map(b=>({bid:b.bid,name:b.name,chip:b.chip,createdAt:b.createdAt})), tunes};
+  zip.file('manifest.json', JSON.stringify(manifest,null,1));
+  const out=await zip.generateAsync({type:'blob', compression:'STORE'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(out);
+  a.download='realbook-sammlung-'+new Date().toISOString().slice(0,10)+'.zip';
+  document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+}
+async function importPackage(file){
+  let zip; try{ zip=await JSZip.loadAsync(file); }catch(e){ alert('Kein gültiges Paket.'); return; }
+  const mf=zip.file('manifest.json'); if(!mf){ alert('Paket ohne Manifest.'); return; }
+  let manifest; try{ manifest=JSON.parse(await mf.async('string')); }catch(e){ alert('Manifest nicht lesbar.'); return; }
+  if(manifest.kind!=='collection'){ alert('Das ist kein Sammlungspaket.'); return; }
+  let addedBooks=0;
+  (manifest.books||[]).forEach(b=>{ if(b&&b.bid&&!userBook(b.bid)){ USERBOOKS.push({bid:b.bid,name:b.name||'Import',chip:b.chip||b.name||'Import',createdAt:b.createdAt||Date.now()}); addedBooks++; } });
+  let fallbackBid=null;
+  const ensureBook=bid=>{ if(bid&&userBook(bid)) return bid; if(!fallbackBid) fallbackBid=createBook('Importierte Noten'); return fallbackBid; };
+  saveUserBooks();
+  const existing=new Set((await libAll()).map(r=>r.id));
+  let added=0, skipped=0;
+  for(const m of (manifest.tunes||[])){
+    if(!m||!m.id||existing.has(m.id)){ skipped++; continue; }
+    const zf=zip.file(m.file); if(!zf){ skipped++; continue; }
+    const blob=await zf.async('blob'); const bid=ensureBook(m.bid);
+    await libPut({id:m.id,bid,title:m.title||'Stück',composer:m.composer||'',addedAt:m.addedAt||Date.now(),np:m.np||1,fileName:m.fileName||'',blob});
+    existing.add(m.id); added++;
+  }
+  saveUserBooks();
+  await loadLibrary(); render(); openLibrarySheet();
+  alert('Sammlungspaket eingelesen.\n'+added+' Stück'+(added===1?'':'e')+' importiert'
+    +(skipped?', '+skipped+' schon vorhanden':'')+(addedBooks?'\n'+addedBooks+' Buch/Bücher angelegt':''));
+}
 
 /* ============ PDF.js, sticky search, fit view, annotation ============ */
 if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='vendor/pdfjs/pdf.worker.min.js';
@@ -1724,7 +1825,7 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-19 · Baustein 2';
+const APP_BUILD='2026-07-19 · Baustein 3';
 (function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
