@@ -567,7 +567,7 @@ function tuneRow(t){
       <div class="meta">${metaHTML}</div>
       ${pillsHTML}
     </div>
-    ${t.isEdit?'':'<div class="iconbtn" data-a="meta" title="Titel & Komponist bearbeiten">✎</div>'}
+    <div class="iconbtn" data-a="meta" title="Titel & Komponist bearbeiten">✎</div>
     <div class="iconbtn ${hasTags?'on-tag':''}" data-a="tag" title="Tags">🏷</div>
     <div class="iconbtn add" title="Zu Setlist">＋</div>
     <div class="iconbtn ${prac?'on-prac':''}" data-a="prac" title="Üben">${metroIcon(prac)}</div>
@@ -771,10 +771,10 @@ function openViewer(t, keepNav){
   document.getElementById('vFitBtn').style.display='flex';
   document.getElementById('vEditBtn').style.display = t.isEdit ? 'none':'flex';
   const vMeta=document.getElementById('vMetaBtn');
-  vMeta.style.display = t.isEdit ? 'none':'flex';                  // Titel/Komponist – Großsammlung wie importierte Stücke
+  vMeta.style.display = 'flex';                                     // Titel/Komponist – Großsammlung, importierte Stücke UND Notizen
   vMeta.onclick=()=>openMetaSheet(t);
   const vt=document.querySelector('.vtitle');                       // Titel/Komponist direkt antippbar
-  if(vt){ vt.style.cursor = t.isEdit?'default':'pointer'; vt.title = t.isEdit?'':'Titel & Komponist bearbeiten'; vt.onclick = t.isEdit?null:(()=>openMetaSheet(CURRENT)); }
+  if(vt){ vt.style.cursor='pointer'; vt.title='Titel & Komponist bearbeiten'; vt.onclick=()=>openMetaSheet(CURRENT); }
   document.getElementById('vShare').onclick=()=>shareTune(t);
   document.getElementById('vPrint').onclick=()=>printCurrent(t);
   if(t.isEdit){
@@ -1493,22 +1493,31 @@ document.getElementById('libBtn').onclick=openLibrarySheet;
 function resetOverride(key){ const t=byKey[key]; if(!t) return; delete OVERRIDES[key]; t.t=t._ot; t.c=t._oc; saveOverrides(); rebuildByKey(); render(); }
 function syncViewerTune(key){ if(CURRENT && CURRENT.key===key){ const t=byKey[key]; if(!t) return; CURRENT=t;
   document.getElementById('vTitle').textContent=t.t;
-  document.getElementById('vSub').textContent = t.isLib ? ((t.c?t.c+' — ':'')+t.b) : ((t.c?t.c+' — ':'')+t.b+', S. '+t.pg); } }
+  document.getElementById('vSub').textContent = t.isEdit
+      ? ('✏️ '+(t.editor||'')+(t.editedAt?' — '+new Date(t.editedAt).toLocaleString('de-DE'):''))
+      : t.isLib ? ((t.c?t.c+' — ':'')+t.b)
+      : ((t.c?t.c+' — ':'')+t.b+', S. '+t.pg); } }
+function saveNoteMeta(t, patch){ const u=USER.find(x=>x.key===t.key); if(!u) return;
+  if('t' in patch) u.t=(patch.t||'').trim()||u.t;
+  if('c' in patch) u.c=(patch.c||'').trim();
+  saveUser(); render(); }
 function openMetaSheet(t){
-  if(!t || t.isEdit) return;                 // Notizen werden hier nicht bearbeitet
-  const isLib=!!t.isLib;
+  if(!t) return;
+  const isLib=!!t.isLib, isNote=!!t.isEdit;
   openSheet(card=>{
     card.innerHTML='<h2>Titel &amp; Komponist</h2><div class="muted" style="margin:-6px 0 14px">'
-      +(isLib
+      +(isNote
+        ? 'Ändere Titel und Komponist dieser Notiz.'
+        : isLib
         ? 'Ändere Titel und Komponist dieses importierten Stücks.'
         : 'Korrigiere die Angaben zu diesem Stück – z. B. einen falschen Komponisten aus der automatischen Ergänzung. '
           +'Die PDF-Datei bleibt unverändert; die Korrektur gilt nur in dieser App und lässt sich zurücksetzen.')+'</div>';
     const wrap=document.createElement('div');
     wrap.innerHTML='<div class="lbl" style="margin:0 0 6px">Titel</div><input class="txt" id="mT" value="'+esc(t.t)+'">'
       +'<div class="lbl" style="margin:12px 0 6px">Komponist</div><input class="txt" id="mC" value="'+esc(t.c||'')+'" placeholder="(leer lassen für keinen Komponisten)">'
-      +'<div class="muted" style="margin-top:10px">Buch: '+esc(bookName(t))+(isLib?'':' · S. '+esc(t.pg))+((!isLib&&OVERRIDES[t.key])?' · <b>korrigiert</b>':'')+'</div>';
+      +'<div class="muted" style="margin-top:10px">Buch: '+esc(bookName(t))+((isLib||isNote)?'':' · S. '+esc(t.pg))+((!isLib&&!isNote&&OVERRIDES[t.key])?' · <b>korrigiert</b>':'')+'</div>';
     card.append(wrap);
-    const hasOv=!isLib && !!OVERRIDES[t.key];
+    const hasOv=!isLib && !isNote && !!OVERRIDES[t.key];
     const row=document.createElement('div'); row.className='row'; row.style.marginTop='16px';
     row.innerHTML='<button class="btn" id="mSave" style="flex:2">Speichern</button>'
       +(hasOv?'<button class="btn ghost" id="mReset" style="flex:1">Zurücksetzen</button>':'')
@@ -1516,7 +1525,8 @@ function openMetaSheet(t){
     card.append(row);
     row.querySelector('#mSave').onclick=async()=>{
       const nt=wrap.querySelector('#mT').value, nc=wrap.querySelector('#mC').value;
-      if(isLib){ await saveLibMeta(t.libId,{title:(nt.trim()||'Stück'), composer:nc.trim()}); }
+      if(isNote){ saveNoteMeta(t,{t:nt, c:nc}); }
+      else if(isLib){ await saveLibMeta(t.libId,{title:(nt.trim()||'Stück'), composer:nc.trim()}); }
       else { applyOverride(t.key,{t:nt, c:nc}); }
       syncViewerTune(t.key); closeSheet();
     };
@@ -1863,7 +1873,7 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-19 · Suche ohne Caps';
+const APP_BUILD='2026-07-19 · Notiz-Titel';
 (function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
