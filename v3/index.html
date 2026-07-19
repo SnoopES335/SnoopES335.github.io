@@ -718,8 +718,9 @@ function render(){
   const list=currentList();
   const active=[];
   if(S.initial) active.push('Buchstabe '+S.initial);
-  if(S.books.size) active.push(S.books.size+' Buch'+(S.books.size>1?'…':''));
-  if(S.tagFilter.size) active.push(S.tagFilter.size+' Tag'+(S.tagFilter.size>1?'s':''));
+  if(S.books.size){ const names=[...S.books].map(bookChip);
+    active.push(S.books.size<=4 ? names.join(', ') : (S.books.size+' Bücher')); }
+  if(S.tagFilter.size) active.push(S.tagFilter.size+(S.tagFilter.size>1?' Tags':' Tag'));
   document.getElementById('hint').textContent = list.length+' Treffer'+(active.length?' · '+active.join(' · '):'');
   if(!list.length){ main.innerHTML='<div class="empty">Keine Treffer.</div>'; LISTNAV=[]; return; }
   LISTNAV=list.map(t=>t.key);
@@ -1862,7 +1863,7 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-19 · Buch-Standard';
+const APP_BUILD='2026-07-19 · Trefferzeile';
 (function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
