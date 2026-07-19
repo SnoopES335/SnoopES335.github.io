@@ -1404,6 +1404,14 @@ function bindDraw(c){
   const gdist=()=>{ const a=arr(); return Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)||1; };
   const gmid=()=>{ const a=arr(); return {x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2}; };
   function cancelStroke(){ ED.drawing=false; ED.activeId=null; ED.stroke=null; drawCurrent(); }
+  // Laufenden Strich sofort festschreiben. WICHTIG gegen den "jeder zweite / kurze Striche
+  // fehlen"-Effekt: auf iPad-Safari kann das pointerup eines kurzen Strichs verspätet oder
+  // nach dem pointerdown des nächsten eintreffen. Wir warten deshalb NIE auf das pointerup –
+  // ein neuer Aufsetzpunkt schreibt den vorigen Strich einfach sofort fest.
+  function finalizeStroke(){
+    if(ED.stroke){ if(ED.base) drawStroke(ED.base.getContext('2d'),ED.stroke); ED.pages[ED.cur].strokes.push(ED.stroke); ED.stroke=null; }
+    ED.drawing=false; ED.activeId=null;
+  }
 
   c.addEventListener('pointerdown',e=>{
     if(e.pointerType==='pen')ED.penSeen=true;
@@ -1412,7 +1420,7 @@ function bindDraw(c){
       if(touches.size>=2){ gz={d:gdist(),z:ED.zoom,m:gmid(),px:ED.panX,py:ED.panY}; if(ED.drawing)cancelStroke(); return; }
       if(ED.penSeen)return;                 // Handballen/Finger zeichnen nie, sobald ein Stift benutzt wurde
     }
-    if(ED.drawing)return;                    // während ein Strich läuft: weitere Zeiger ignorieren
+    if(ED.drawing)finalizeStroke();          // hängengebliebenen Vorstrich sofort sichern, dann neu beginnen
     e.preventDefault();
     rect=c.getBoundingClientRect();
     const isHL=ED.tool==='hl', isEr=ED.tool==='erase';
@@ -1440,8 +1448,7 @@ function bindDraw(c){
     if(e.pointerType==='touch'){ touches.delete(e.pointerId);
       if(touches.size<2){ gz=null; if(ED.zoom<=1.02){ ED.zoom=1;ED.panX=0;ED.panY=0;applyZoom(); } } }
     if(!ED.drawing||e.pointerId!==ED.activeId)return;
-    ED.drawing=false; ED.activeId=null;
-    if(ED.stroke){ if(ED.base) drawStroke(ED.base.getContext('2d'),ED.stroke); ED.pages[ED.cur].strokes.push(ED.stroke); ED.stroke=null; }
+    finalizeStroke();
   };
   c.addEventListener('pointerup',end); c.addEventListener('pointercancel',end);
 }
