@@ -4,7 +4,7 @@
    - Noten (/tunes/…): CACHE-FIRST → einmal geladen bleiben sie offline verfügbar.
    Der bestehende Noten-Cache ('tunes-rb-v1') wird bewusst NICHT umbenannt, damit bereits
    offline gespeicherte Noten erhalten bleiben. */
-const SHELL = 'shell-rb-v3';
+const SHELL = 'shell-rb-v5-pencilfix3';
 const TUNES = 'tunes-rb-v1';
 const SHELL_ASSETS = [
   './', './index.html', './data.js', './manifest.webmanifest',
@@ -38,9 +38,9 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Shell: network-first (immer aktuell), Fallback Cache (offline)
+  // Shell: network-first mit HTTP-Cache-Umgehung (immer aktueller Code online), Fallback Cache (offline)
   e.respondWith(
-    fetch(e.request).then(resp => {
+    fetch(e.request, { cache: 'no-store' }).then(resp => {
       if (resp && resp.status === 200) { const copy = resp.clone(); caches.open(SHELL).then(c => c.put(e.request, copy)); }
       return resp;
     }).catch(() => caches.match(e.request).then(hit => hit || caches.match('./index.html')))

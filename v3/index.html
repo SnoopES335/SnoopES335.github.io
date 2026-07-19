@@ -295,6 +295,7 @@
     <button class="ebtn" id="eUndo" title="Rückgängig">↶</button>
     <div id="ePageNav" style="display:none;gap:6px;align-items:center"></div>
     <span style="flex:1"></span>
+    <span id="eBuild" style="color:var(--sub);font-size:11px;opacity:.75;align-self:center;margin-right:8px"></span>
     <button class="ebtn" id="eCancel">Abbrechen</button>
     <button class="ebtn primary" id="eSave">Speichern</button>
   </div>
@@ -1482,6 +1483,10 @@ if(location.protocol==='file:'){
   d.querySelector('.x').onclick=()=>d.remove();
   document.body.appendChild(d);
 }
+/* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
+const APP_BUILD='2026-07-19 · Pencil-Fix 3';
+(function(){ const b=document.getElementById('eBuild'); if(b) b.textContent='Build '+APP_BUILD; })();
+
 /* register service worker (offline / installable) + Auto-Update:
    sobald eine neue Version aktiv wird, die Seite einmal automatisch neu laden. */
 if('serviceWorker' in navigator){
