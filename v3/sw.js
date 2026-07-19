@@ -4,7 +4,7 @@
    - Noten (/tunes/…): CACHE-FIRST → einmal geladen bleiben sie offline verfügbar.
    Der bestehende Noten-Cache ('tunes-rb-v1') wird bewusst NICHT umbenannt, damit bereits
    offline gespeicherte Noten erhalten bleiben. */
-const SHELL = 'shell-rb-v12-baustein3';
+const SHELL = 'shell-rb-v13-meta-ueberall';
 const TUNES = 'tunes-rb-v1';
 const SHELL_ASSETS = [
   './', './index.html', './data.js', './manifest.webmanifest',
