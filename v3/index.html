@@ -123,8 +123,10 @@
   .fitwrap img.pg{display:block}
 
   /* annotation editor */
-  .editor{position:fixed;inset:0;background:#20242a;z-index:70;display:none;flex-direction:column}
+  .editor{position:fixed;inset:0;background:#20242a;z-index:70;display:none;flex-direction:column;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   .editor.open{display:flex}
+  .editor .etitle{-webkit-user-select:text;user-select:text}
   .ebar{display:flex;align-items:center;gap:8px;padding:9px 12px;flex-wrap:wrap;
     padding-top:calc(9px + env(safe-area-inset-top));background:var(--panel);border-bottom:1px solid var(--line)}
   .etitle{flex:0 1 240px;min-height:40px;padding:9px 12px}
@@ -140,7 +142,7 @@
   .estack{position:relative;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.5);touch-action:none;
     -webkit-user-select:none;user-select:none;transform-origin:center center;will-change:transform}
   .estack canvas{position:absolute;left:0;top:0;display:block}
-  .estack canvas.draw{touch-action:none}
+  .estack canvas.draw{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   .penw{width:34px;height:34px;border-radius:8px;border:2px solid #33475c;cursor:pointer;background:#2a2d30;display:flex;align-items:center;justify-content:center}
   .penw.on{border-color:#fff}
   .penw i{display:block;background:#cfe2f5;border-radius:999px}
@@ -1474,6 +1476,12 @@ function bindDraw(c){
 }
 document.getElementById('eErase').onclick=()=>{ if(!ED)return; setTool(ED.tool==='erase'?'pen':'erase'); };
 document.getElementById('eHL').onclick=()=>{ if(!ED)return; setTool(ED.tool==='hl'?'pen':'hl'); };
+/* iOS-Textauswahl/Callout ("Kopieren/Auswählen") unterdrücken – sie kapert sonst die
+   Stift-Berührung und BRICHT den laufenden Strich ab (Ursache verlorener Striche). */
+(function(){ const ed=document.getElementById('editor'); if(!ed)return;
+  const stop=e=>{ const t=e.target; if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'))return; e.preventDefault(); };
+  ['selectstart','contextmenu','gesturestart','gesturechange'].forEach(n=>ed.addEventListener(n,stop,{passive:false}));
+})();
 document.getElementById('eUndo').onclick=()=>{ if(!ED)return; ED.pages[ED.cur].strokes.pop(); redrawStrokes(); };
 document.getElementById('eCancel').onclick=()=>{ document.getElementById('editor').classList.remove('open'); ED=null; };
 document.getElementById('eSave').onclick=async()=>{
@@ -1503,7 +1511,7 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-19 · Pencil-Fix 4';
+const APP_BUILD='2026-07-19 · Pencil-Fix 5';
 (function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
