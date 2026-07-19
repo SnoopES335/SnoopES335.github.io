@@ -1366,10 +1366,13 @@ function showEditorPage(i){
   const bgC=document.createElement('canvas'); bgC.width=pg.w; bgC.height=pg.h; bgC.style.width='100%'; bgC.style.height='100%'; bgC.getContext('2d').drawImage(pg.bg,0,0);
   const drawC=document.createElement('canvas'); drawC.className='draw'; drawC.width=pg.w; drawC.height=pg.h; drawC.style.width='100%'; drawC.style.height='100%';
   stack.append(bgC,drawC); stage.append(stack); ED.drawC=drawC; ED.stackEl=stack;
+  ED.base=document.createElement('canvas'); ED.base.width=pg.w; ED.base.height=pg.h;
   ED.zoom=1; ED.panX=0; ED.panY=0; applyZoom();
   redrawStrokes(); bindDraw(drawC);
 }
-function redrawStrokes(){ const c=ED.drawC,ctx=c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); ED.pages[ED.cur].strokes.forEach(s=>drawStroke(ctx,s)); }
+function rebuildBase(){ if(!ED.base)return; const b=ED.base,ctx=b.getContext('2d'); ctx.clearRect(0,0,b.width,b.height); ED.pages[ED.cur].strokes.forEach(s=>drawStroke(ctx,s)); }
+function drawCurrent(){ const c=ED.drawC,ctx=c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); if(ED.base)ctx.drawImage(ED.base,0,0); if(ED.stroke)drawStroke(ctx,ED.stroke); }
+function redrawStrokes(){ rebuildBase(); drawCurrent(); }
 function drawStroke(ctx,s){
   if(s.hl){ ctx.save(); ctx.globalAlpha=0.30; ctx.globalCompositeOperation='multiply'; ctx.strokeStyle=s.color; ctx.fillStyle=s.color; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.lineWidth=s.w;
     if(s.pts.length===1){ ctx.beginPath(); ctx.arc(s.pts[0].x,s.pts[0].y,s.w/2,0,7); ctx.fill(); }
@@ -1388,14 +1391,18 @@ function bindDraw(c){
   c.addEventListener('pointerdown',e=>{
     if(e.pointerType==='pen')ED.penSeen=true;
     if(ED.penSeen&&e.pointerType==='touch')return;
-    e.preventDefault(); c.setPointerCapture(e.pointerId);
+    e.preventDefault(); try{c.setPointerCapture(e.pointerId);}catch(_){}
     const isHL=ED.tool==='hl'; const bw=isHL?ED.hlWidth:ED.baseWidth;
     const w=bw*(c.width/c.getBoundingClientRect().width);
-    const s={color:ED.color,w,erase:ED.tool==='erase',hl:isHL,pts:[pt(e)]};
-    ED.stroke=s; ED.drawing=true; ED.pages[ED.cur].strokes.push(s); redrawStrokes();
+    ED.stroke={color:ED.color,w,erase:ED.tool==='erase',hl:isHL,pts:[pt(e)]};
+    ED.drawing=true; drawCurrent();
   });
-  c.addEventListener('pointermove',e=>{ if(!ED.drawing||!ED.stroke)return; if(ED.penSeen&&e.pointerType==='touch')return; e.preventDefault(); ED.stroke.pts.push(pt(e)); redrawStrokes(); });
-  const end=()=>{ if(!ED.drawing)return; ED.drawing=false; ED.stroke=null; };
+  c.addEventListener('pointermove',e=>{ if(!ED.drawing||!ED.stroke)return; if(ED.penSeen&&e.pointerType==='touch')return; e.preventDefault();
+    const evs=(e.getCoalescedEvents&&e.getCoalescedEvents().length)?e.getCoalescedEvents():[e];
+    for(const ev of evs) ED.stroke.pts.push(pt(ev));
+    drawCurrent(); });
+  const end=e=>{ if(!ED.drawing)return; ED.drawing=false;
+    if(ED.stroke){ if(ED.base) drawStroke(ED.base.getContext('2d'),ED.stroke); ED.pages[ED.cur].strokes.push(ED.stroke); ED.stroke=null; } };
   c.addEventListener('pointerup',end); c.addEventListener('pointercancel',end);
 }
 document.getElementById('eErase').onclick=()=>{ if(!ED)return; setTool(ED.tool==='erase'?'pen':'erase'); };
