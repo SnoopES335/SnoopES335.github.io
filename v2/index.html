@@ -178,12 +178,20 @@
       <button class="sheetbtn" data-d="exp-setlists">⤓ Setlists exportieren</button>
       <button class="sheetbtn" data-d="exp-fav">⤓ Favoriten exportieren</button>
       <button class="sheetbtn" data-d="exp-all">⤓ Alles zusammen exportieren</button>
-      <button class="sheetbtn" data-d="import">⤒ Datei importieren (zusammenführen)</button>
+      <button class="sheetbtn" data-d="import">⤒ Listen-Datei importieren (zusammenführen)</button>
+    </div>
+    <h2 style="margin-top:16px">Sammlungspaket</h2>
+    <div class="sub">Stücke samt Noten in einer Datei — zum Sichern oder Weitergeben.</div>
+    <div style="margin-top:10px">
+      <button class="sheetbtn" data-d="pkg-all">📦 Ganze Sammlung als Paket sichern</button>
+      <button class="sheetbtn" data-d="pkg-view">📦 Aktuelle Ansicht als Paket (z. B. Setlist)</button>
+      <button class="sheetbtn" data-d="pkg-import">📥 Sammlungspaket importieren</button>
     </div>
     <div class="row"><button class="ghost" id="dataClose">Schließen</button></div>
   </div>
 </div>
 <input id="settingsImport" type="file" accept="application/json,.json" hidden>
+<input id="pkgImport" type="file" accept=".zip,application/zip,.realbookpkg" hidden>
 
 <!-- Viewer -->
 <div class="viewer" id="viewer">
@@ -195,6 +203,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="vendor/pdfjs/pdf.min.js"></script>
+<script src="vendor/jszip/jszip.min.js"></script>
 <script>
 "use strict";
 pdfjsLib.GlobalWorkerOptions.workerSrc = "vendor/pdfjs/pdf.worker.min.js";
@@ -392,10 +401,83 @@ function exportData(kind){
   dl(new Blob([JSON.stringify(obj,null,1)],{type:"application/json"}), name);
   toast("Exportiert: "+name);
 }
-document.querySelectorAll("#dataOverlay [data-d]").forEach(b=> b.onclick=()=>{ const d=b.dataset.d; if(d==="import"){ $("#settingsImport").click(); } else { exportData(d); } $("#dataOverlay").classList.remove("on"); });
+document.querySelectorAll("#dataOverlay [data-d]").forEach(b=> b.onclick=async ()=>{
+  const d=b.dataset.d; $("#dataOverlay").classList.remove("on");
+  if(d==="import") $("#settingsImport").click();
+  else if(d==="pkg-import") $("#pkgImport").click();
+  else if(d==="pkg-all") await exportPackage(PIECES, "sammlung");
+  else if(d==="pkg-view") await exportPackage(visiblePieces(), viewName());
+  else exportData(d);
+});
 $("#settingsImport").onchange=async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f)return;
   let obj; try{ obj=JSON.parse(await f.text()); }catch(_){ return toast("Datei nicht lesbar"); }
   await mergeSettings(obj); await refresh(); toast("Zusammengeführt"); };
+
+/* ---------- Sammlungspaket (Baustein 3): Stücke + Noten in einer Datei ---------- */
+function visiblePieces(){ const q=FILTER.trim().toLowerCase(); let it=PIECES.filter(inView);
+  if(q) it=it.filter(p=>(p.title+" "+p.composer+" "+p.book).toLowerCase().includes(q)); return it; }
+function viewName(){ if(VIEW.mode==="setlist"){ const s=SETLISTS.find(x=>x.id===VIEW.id); return "setlist-"+(s?s.name:"").replace(/[^\w]+/g,"-"); }
+  if(VIEW.mode==="tag"){ const t=tagById(VIEW.id); return "tag-"+(t?t.name:"").replace(/[^\w]+/g,"-"); }
+  if(VIEW.mode==="fav") return "favoriten"; return "ansicht"; }
+function safeName(s){ return (s||"paket").replace(/[^\w\-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,60)||"paket"; }
+
+async function exportPackage(pieces, baseName){
+  if(!pieces.length) return toast("Keine Stücke in dieser Ansicht");
+  const totalBytes=pieces.reduce((s,p)=>s+pieceSize(p),0);
+  if(totalBytes>150e6 && !window.confirm("Das Paket ist groß ("+fmtSize(totalBytes)+"). Auf dem iPad kann das knapp werden. Trotzdem erstellen?")) return;
+  toast("Paket wird erstellt …");
+  const zip=new JSZip();
+  const usedTagIds=new Set(); const meta=[];
+  for(const p of pieces){
+    const f=p.files[0]; const blob=await getBlob(f.blobId);
+    const fname="pieces/"+p.id+".pdf"; zip.file(fname, blob);
+    (p.tags||[]).forEach(id=>usedTagIds.add(id));
+    meta.push({ title:p.title, composer:p.composer, book:p.book, source:p.source||"", fav:!!p.fav,
+      tags:(p.tags||[]).map(id=>{const t=tagById(id);return t?t.name:null;}).filter(Boolean), file:fname });
+  }
+  const refSet=new Set(pieces.map(refKey));
+  const setlistsOut=SETLISTS.map(s=>({ name:s.name, items:s.items.map(id=>{const p=PIECES.find(x=>x.id===id);return p?{t:p.title,b:p.book}:null;})
+      .filter(r=>r&&refSet.has((r.t||"").toLowerCase().trim()+"|"+(r.b||"").toLowerCase().trim())) })).filter(s=>s.items.length);
+  const manifest=stamp("package",{ count:meta.length,
+    tags:TAGS.filter(t=>usedTagIds.has(t.id)).map(t=>({name:t.name,color:t.color})),
+    setlists:setlistsOut, pieces:meta });
+  zip.file("manifest.json", JSON.stringify(manifest,null,1));
+  const out=await zip.generateAsync({type:"blob", compression:"STORE"});
+  dl(out, safeName(baseName)+".realbookpkg.zip");
+  toast(meta.length+" Stücke als Paket gesichert");
+}
+$("#pkgImport").onchange=async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f)return;
+  toast("Paket wird gelesen …");
+  let zip; try{ zip=await JSZip.loadAsync(f); }catch(_){ return toast("Kein gültiges Paket"); }
+  const mf=zip.file("manifest.json"); if(!mf) return toast("Paket ohne Manifest");
+  let manifest; try{ manifest=JSON.parse(await mf.async("string")); }catch(_){ return toast("Manifest nicht lesbar"); }
+  // Tags anlegen (nach Name)
+  for(const td of (manifest.tags||[])){ if(!TAGS.find(t=>t.name.toLowerCase()===td.name.toLowerCase())) TAGS.push({id:uid("t_"),name:td.name,color:td.color||PALETTE[TAGS.length%PALETTE.length]}); }
+  await putSetting("tags",TAGS);
+  const existing=new Set(PIECES.map(refKey));
+  let added=0, skipped=0;
+  for(const m of (manifest.pieces||[])){
+    const key=(m.title||"").toLowerCase().trim()+"|"+(m.book||"").toLowerCase().trim();
+    if(existing.has(key)){ skipped++; continue; }
+    const zf=zip.file(m.file); if(!zf){ skipped++; continue; }
+    const blob=await zf.async("blob");
+    const id=uid(), blobId="b_"+id;
+    const tagIds=(m.tags||[]).map(tn=>{ const t=TAGS.find(x=>x.name.toLowerCase()===tn.toLowerCase()); return t?t.id:null; }).filter(Boolean);
+    const piece={ id, title:m.title||"Ohne Titel", composer:m.composer||"", book:m.book||"Import", source:m.source||"",
+      createdAt:Date.now(), fav:!!m.fav, tags:tagIds, files:[{role:"score",blobId,name:(m.title||"stueck")+".pdf",size:blob.size}] };
+    const t=tx(["pieces","blobs"],"readwrite");
+    await Promise.all([ reqP(t.objectStore("blobs").put({id:blobId,blob})), reqP(t.objectStore("pieces").put(piece)) ]);
+    existing.add(key); added++;
+    if(added%25===0) toast("Importiere … "+added);
+  }
+  // Setlists nach Import zusammenführen (jetzt sind die Stücke da)
+  await loadAll();
+  for(const sd of (manifest.setlists||[])){ let s=SETLISTS.find(x=>x.name.toLowerCase()===sd.name.toLowerCase()); if(!s){ s={id:uid("s_"),name:sd.name,items:[]}; SETLISTS.push(s); }
+    for(const ref of (sd.items||[])){ const p=findPieceByRef(ref); if(p&&!s.items.includes(p.id)) s.items.push(p.id); } }
+  await putSetting("setlists",SETLISTS);
+  await refresh();
+  toast(added+" importiert"+(skipped?", "+skipped+" schon vorhanden":""));
+};
 
 function findPieceByRef(ref){ const k=(ref.t||"").toLowerCase().trim()+"|"+(ref.b||"").toLowerCase().trim();
   return PIECES.find(p=>refKey(p)===k) || PIECES.find(p=>(p.title||"").toLowerCase().trim()===(ref.t||"").toLowerCase().trim()); }
