@@ -11,9 +11,9 @@
   html,body{ margin:0; height:100%; background:var(--bg); color:var(--ink);
     font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
   header{ position:sticky; top:0; z-index:5; background:var(--card); border-bottom:1px solid var(--line);
-    padding:calc(env(safe-area-inset-top) + 10px) 14px 10px; }
+    padding:calc(env(safe-area-inset-top) + 10px) 14px 8px; }
   .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  h1{ font-size:18px; margin:0; font-weight:700; }
+  h1{ font-size:17px; margin:0; font-weight:700; }
   .sub{ color:var(--muted); font-size:12px; margin-top:2px; }
   button,.btn{ font:inherit; border:1px solid var(--line); background:var(--card); color:var(--ink);
     padding:8px 12px; border-radius:10px; cursor:pointer; }
@@ -21,30 +21,46 @@
   button.ghost{ background:transparent; }
   button:active{ transform:translateY(1px); }
   #search{ flex:1; min-width:140px; padding:9px 12px; border:1px solid var(--line); border-radius:10px; }
+  .chips{ display:flex; gap:6px; overflow-x:auto; padding:8px 0 2px; -webkit-overflow-scrolling:touch; }
+  .chip{ white-space:nowrap; border:1px solid var(--line); background:var(--card); border-radius:20px;
+    padding:5px 12px; font-size:13px; cursor:pointer; }
+  .chip.on{ background:var(--ink); color:#fff; border-color:var(--ink); }
+  .chip .dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+  .toolbar{ display:flex; gap:6px; margin-top:4px; }
+  .toolbar button{ font-size:13px; padding:6px 10px; }
   main{ padding:12px 14px 40px; }
-  .empty{ text-align:center; color:var(--muted); padding:48px 16px; }
+  .empty{ text-align:center; color:var(--muted); padding:40px 16px; }
   .empty b{ color:var(--ink); }
   ul{ list-style:none; margin:0; padding:0; }
   li.piece{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px;
-    margin-bottom:8px; display:flex; align-items:center; gap:10px; }
+    margin-bottom:8px; display:flex; align-items:center; gap:8px; }
   .pinfo{ flex:1; min-width:0; }
   .ptitle{ font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .pmeta{ color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .pacts{ display:flex; gap:6px; }
-  .icobtn{ padding:7px 9px; border-radius:9px; }
+  .ptags{ margin-top:3px; display:flex; gap:4px; flex-wrap:wrap; }
+  .ptag{ font-size:11px; border-radius:20px; padding:1px 8px; color:#fff; }
+  .pacts{ display:flex; gap:4px; }
+  .icobtn{ padding:7px 9px; border-radius:9px; background:transparent; border:1px solid var(--line); }
+  .star.on{ color:#f2b60c; border-color:#f2b60c; }
   .bar{ position:fixed; left:0; right:0; bottom:0; background:var(--card); border-top:1px solid var(--line);
     padding:8px 14px calc(env(safe-area-inset-bottom) + 8px); display:flex; gap:8px; align-items:center; }
   .grow{ flex:1; }
   .usage{ color:var(--muted); font-size:12px; }
-  /* Modal */
   .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:20; padding:16px; }
   .overlay.on{ display:flex; }
-  .modal{ background:var(--card); border-radius:14px; width:min(460px,100%); max-height:90vh; overflow:auto; padding:16px; }
-  .modal h2{ font-size:16px; margin:0 0 12px; }
+  .modal{ background:var(--card); border-radius:14px; width:min(460px,100%); max-height:88vh; overflow:auto; padding:16px; }
+  .modal h2{ font-size:16px; margin:0 0 4px; }
   label{ display:block; font-size:12px; color:var(--muted); margin:10px 0 4px; }
-  input[type=text]{ width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:9px; font:inherit; }
+  input[type=text],input[type=search]{ width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:9px; font:inherit; }
   .modal .row{ justify-content:flex-end; margin-top:16px; }
-  /* Viewer */
+  .listrow{ display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); }
+  .listrow:last-child{ border-bottom:none; }
+  .sheetbtn{ display:block; width:100%; text-align:left; padding:12px 10px; border:none; border-bottom:1px solid var(--line); background:transparent; }
+  .sheetbtn:last-child{ border-bottom:none; }
+  .swatch{ width:22px; height:22px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px var(--line); cursor:pointer; }
+  .swatch.sel{ box-shadow:0 0 0 2px var(--ink); }
+  .checkline{ display:flex; align-items:center; gap:10px; padding:9px 2px; }
+  .checkline input{ width:20px; height:20px; }
   .viewer{ position:fixed; inset:0; background:#111; display:none; flex-direction:column; z-index:30; }
   .viewer.on{ display:flex; }
   .vtop{ display:flex; align-items:center; gap:8px; padding:calc(env(safe-area-inset-top) + 8px) 12px 8px; color:#fff; }
@@ -52,8 +68,7 @@
   .vtop button{ background:#2a2a2e; color:#fff; border-color:#3a3a3e; }
   .vstage{ flex:1; overflow:auto; display:flex; align-items:center; justify-content:center; }
   #pdfcanvas{ max-width:100%; box-shadow:0 2px 16px rgba(0,0,0,.5); background:#fff; }
-  .vnav{ display:flex; align-items:center; justify-content:center; gap:16px; color:#fff;
-    padding:8px 12px calc(env(safe-area-inset-bottom) + 8px); }
+  .vnav{ display:flex; align-items:center; justify-content:center; gap:16px; color:#fff; padding:8px 12px calc(env(safe-area-inset-bottom) + 8px); }
   .vnav button{ background:#2a2a2e; color:#fff; border-color:#3a3a3e; min-width:64px; }
   .toast{ position:fixed; left:50%; bottom:80px; transform:translateX(-50%); background:#111; color:#fff;
     padding:10px 16px; border-radius:20px; font-size:14px; opacity:0; transition:opacity .2s; z-index:50; pointer-events:none; }
@@ -70,8 +85,12 @@
     </div>
     <button class="primary" id="importBtn">＋ Importieren</button>
   </div>
-  <div class="row" style="margin-top:10px">
-    <input id="search" type="search" placeholder="Suche nach Titel, Komponist, Buch …" autocomplete="off">
+  <div class="row" style="margin-top:8px"><input id="search" type="search" placeholder="Suche nach Titel, Komponist, Buch …" autocomplete="off"></div>
+  <div class="chips" id="filterChips"></div>
+  <div class="toolbar">
+    <button id="manageTags">🏷 Tags</button>
+    <button id="manageSetlists">🎵 Setlists</button>
+    <button id="dataMenuBtn">⤓ Daten</button>
   </div>
   <input id="fileInput" type="file" accept="application/pdf,.pdf" multiple hidden>
 </header>
@@ -88,7 +107,21 @@
 <div class="bar">
   <div class="usage" id="usage">Speicher: —</div>
   <div class="grow"></div>
-  <button class="ghost" id="exportAllBtn" title="Ganze Sammlung sichern">⤓ Sichern</button>
+</div>
+
+<!-- Per-piece action sheet -->
+<div class="overlay" id="sheetOverlay">
+  <div class="modal">
+    <h2 id="sheetTitle"></h2>
+    <div style="margin-top:8px">
+      <button class="sheetbtn" data-s="tags">🏷 Tags zuordnen</button>
+      <button class="sheetbtn" data-s="setlist">🎵 Zu Setlist hinzufügen</button>
+      <button class="sheetbtn" data-s="edit">✎ Titel & Komponist bearbeiten</button>
+      <button class="sheetbtn" data-s="export">⤓ Als PDF exportieren</button>
+      <button class="sheetbtn" data-s="del" style="color:var(--danger)">🗑 Löschen</button>
+    </div>
+    <div class="row"><button class="ghost" id="sheetClose">Schließen</button></div>
+  </div>
 </div>
 
 <!-- Edit modal -->
@@ -98,37 +131,65 @@
     <label>Titel</label><input type="text" id="fTitle">
     <label>Komponist / Interpret</label><input type="text" id="fComposer">
     <label>Buch / Quelle</label><input type="text" id="fBook">
-    <div class="row">
-      <button class="ghost" id="editCancel">Abbrechen</button>
-      <button class="primary" id="editSave">Speichern</button>
-    </div>
+    <div class="row"><button class="ghost" id="editCancel">Abbrechen</button><button class="primary" id="editSave">Speichern</button></div>
   </div>
 </div>
 
-<!-- Confirm modal -->
-<div class="overlay" id="confirmOverlay">
+<!-- Tag picker (assign to a piece) -->
+<div class="overlay" id="tagPickOverlay">
   <div class="modal">
-    <h2 id="confirmTitle">Löschen?</h2>
-    <div id="confirmText" class="sub"></div>
-    <div class="row">
-      <button class="ghost" id="confirmCancel">Abbrechen</button>
-      <button class="primary" id="confirmOk" style="background:var(--danger);border-color:var(--danger)">Löschen</button>
-    </div>
+    <h2>Tags zuordnen</h2>
+    <div id="tagPickList"></div>
+    <label>Neuen Tag anlegen</label>
+    <div class="row" style="justify-content:flex-start"><input type="text" id="newTagName" placeholder="Tag-Name" style="flex:1"><button id="newTagAdd">＋</button></div>
+    <div class="row"><button class="primary" id="tagPickDone">Fertig</button></div>
   </div>
 </div>
+
+<!-- Tag manager -->
+<div class="overlay" id="tagMgrOverlay">
+  <div class="modal">
+    <h2>Tags verwalten</h2>
+    <div id="tagMgrList"></div>
+    <label>Neuer Tag</label>
+    <div class="row" style="justify-content:flex-start"><input type="text" id="mgrTagName" placeholder="Name" style="flex:1"><button id="mgrTagAdd">Anlegen</button></div>
+    <div class="row"><button class="ghost" id="tagMgrClose">Schließen</button></div>
+  </div>
+</div>
+
+<!-- Setlist picker / manager -->
+<div class="overlay" id="setlistOverlay">
+  <div class="modal">
+    <h2 id="setlistTitle">Setlists</h2>
+    <div id="setlistList"></div>
+    <label>Neue Setlist</label>
+    <div class="row" style="justify-content:flex-start"><input type="text" id="newSetlistName" placeholder="Name" style="flex:1"><button id="newSetlistAdd">Anlegen</button></div>
+    <div class="row"><button class="ghost" id="setlistClose">Schließen</button></div>
+  </div>
+</div>
+
+<!-- Data menu (Baustein 2) -->
+<div class="overlay" id="dataOverlay">
+  <div class="modal">
+    <h2>Daten sichern &amp; teilen</h2>
+    <div class="sub">Listen und Tags als eigene Dateien — unabhängig von den Noten.</div>
+    <div style="margin-top:10px">
+      <button class="sheetbtn" data-d="exp-tags">⤓ Tags exportieren</button>
+      <button class="sheetbtn" data-d="exp-setlists">⤓ Setlists exportieren</button>
+      <button class="sheetbtn" data-d="exp-fav">⤓ Favoriten exportieren</button>
+      <button class="sheetbtn" data-d="exp-all">⤓ Alles zusammen exportieren</button>
+      <button class="sheetbtn" data-d="import">⤒ Datei importieren (zusammenführen)</button>
+    </div>
+    <div class="row"><button class="ghost" id="dataClose">Schließen</button></div>
+  </div>
+</div>
+<input id="settingsImport" type="file" accept="application/json,.json" hidden>
 
 <!-- Viewer -->
 <div class="viewer" id="viewer">
-  <div class="vtop">
-    <div class="vt" id="vTitle"></div>
-    <button id="vClose">✕ Schließen</button>
-  </div>
+  <div class="vtop"><div class="vt" id="vTitle"></div><button id="vClose">✕ Schließen</button></div>
   <div class="vstage" id="vStage"><canvas id="pdfcanvas"></canvas></div>
-  <div class="vnav">
-    <button id="vPrev">‹ Zurück</button>
-    <span id="vPage">1 / 1</span>
-    <button id="vNext">Weiter ›</button>
-  </div>
+  <div class="vnav"><button id="vPrev">‹ Zurück</button><span id="vPage">1 / 1</span><button id="vNext">Weiter ›</button></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -138,196 +199,254 @@
 "use strict";
 pdfjsLib.GlobalWorkerOptions.workerSrc = "vendor/pdfjs/pdf.worker.min.js";
 
-/* ---------- IndexedDB: die Sammlung ---------- */
-const DB_NAME = "realbook_lib", DB_VER = 1;
-let _db = null;
-function openDB(){
-  return new Promise((res, rej)=>{
-    const r = indexedDB.open(DB_NAME, DB_VER);
-    r.onupgradeneeded = e=>{
-      const db = e.target.result;
-      if(!db.objectStoreNames.contains("pieces")) db.createObjectStore("pieces", {keyPath:"id"});
-      if(!db.objectStoreNames.contains("blobs"))  db.createObjectStore("blobs",  {keyPath:"id"});
-    };
-    r.onsuccess = ()=>{ _db=r.result; res(_db); };
-    r.onerror  = ()=>rej(r.error);
-  });
-}
-function tx(stores, mode){ return _db.transaction(stores, mode); }
+/* ---------- IndexedDB ---------- */
+const DB_NAME="realbook_lib", DB_VER=2;
+let _db=null;
+function openDB(){ return new Promise((res,rej)=>{ const r=indexedDB.open(DB_NAME,DB_VER);
+  r.onupgradeneeded=e=>{ const db=e.target.result;
+    if(!db.objectStoreNames.contains("pieces")) db.createObjectStore("pieces",{keyPath:"id"});
+    if(!db.objectStoreNames.contains("blobs"))  db.createObjectStore("blobs",{keyPath:"id"});
+    if(!db.objectStoreNames.contains("settings")) db.createObjectStore("settings",{keyPath:"key"});
+  };
+  r.onsuccess=()=>{ _db=r.result; res(_db); }; r.onerror=()=>rej(r.error); }); }
+function tx(s,m){ return _db.transaction(s,m); }
 function reqP(req){ return new Promise((res,rej)=>{ req.onsuccess=()=>res(req.result); req.onerror=()=>rej(req.error); }); }
-const uid = ()=> "p_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+const uid=(p)=> (p||"p_")+Math.random().toString(36).slice(2)+Date.now().toString(36);
 
 async function addPieceFromFile(file){
-  const id = uid(), blobId = "b_"+id;
-  const title = file.name.replace(/\.pdf$/i,"").replace(/_/g," ").trim() || "Ohne Titel";
-  const piece = { id, title, composer:"", book:"Import", source:"", createdAt:Date.now(),
-                  files:[{ role:"score", blobId, name:file.name, size:file.size }] };
-  const t = tx(["pieces","blobs"],"readwrite");
-  await Promise.all([ reqP(t.objectStore("blobs").put({id:blobId, blob:file})),
-                      reqP(t.objectStore("pieces").put(piece)) ]);
+  const id=uid(), blobId="b_"+id;
+  const title=file.name.replace(/\.pdf$/i,"").replace(/_/g," ").trim()||"Ohne Titel";
+  const piece={ id,title,composer:"",book:"Import",source:"",createdAt:Date.now(),fav:false,tags:[],
+    files:[{role:"score",blobId,name:file.name,size:file.size}] };
+  const t=tx(["pieces","blobs"],"readwrite");
+  await Promise.all([ reqP(t.objectStore("blobs").put({id:blobId,blob:file})), reqP(t.objectStore("pieces").put(piece)) ]);
   return piece;
 }
 async function allPieces(){ return reqP(tx("pieces","readonly").objectStore("pieces").getAll()); }
 async function putPiece(p){ return reqP(tx("pieces","readwrite").objectStore("pieces").put(p)); }
-async function getBlob(blobId){ const r = await reqP(tx("blobs","readonly").objectStore("blobs").get(blobId)); return r && r.blob; }
-async function deletePiece(p){
-  const t = tx(["pieces","blobs"],"readwrite");
+async function getBlob(id){ const r=await reqP(tx("blobs","readonly").objectStore("blobs").get(id)); return r&&r.blob; }
+async function deletePieceRec(p){ const t=tx(["pieces","blobs"],"readwrite");
   for(const f of (p.files||[])) t.objectStore("blobs").delete(f.blobId);
   t.objectStore("pieces").delete(p.id);
-  return new Promise((res,rej)=>{ t.oncomplete=res; t.onerror=()=>rej(t.error); });
-}
+  return new Promise((res,rej)=>{ t.oncomplete=res; t.onerror=()=>rej(t.error); }); }
+async function getSetting(k,def){ const r=await reqP(tx("settings","readonly").objectStore("settings").get(k)); return r? r.value : def; }
+async function putSetting(k,v){ return reqP(tx("settings","readwrite").objectStore("settings").put({key:k,value:v})); }
 
-/* ---------- Zustand + Helfer ---------- */
-let PIECES = [], FILTER = "";
-const $ = s=>document.querySelector(s);
-function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("on"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("on"),1800); }
-function fmtSize(b){ if(b>=1e6) return (b/1e6).toFixed(1)+" MB"; if(b>=1e3) return Math.round(b/1e3)+" KB"; return b+" B"; }
+/* ---------- Zustand ---------- */
+let PIECES=[], TAGS=[], SETLISTS=[], FILTER="", VIEW={mode:"all"};
+const $=s=>document.querySelector(s);
+function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("on"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("on"),1700); }
+function fmtSize(b){ if(b>=1e6)return (b/1e6).toFixed(1)+" MB"; if(b>=1e3)return Math.round(b/1e3)+" KB"; return (b||0)+" B"; }
 function pieceSize(p){ return (p.files||[]).reduce((s,f)=>s+(f.size||0),0); }
+function tagById(id){ return TAGS.find(t=>t.id===id); }
+function refKey(p){ return (p.title||"").toLowerCase().trim()+"|"+(p.book||"").toLowerCase().trim(); }
+const PALETTE=["#e2564d","#e08a1e","#3f9e57","#2f6df6","#8a56d6","#d64f9a","#5a7d8c","#111"];
 
-async function refresh(){
-  PIECES = (await allPieces()).sort((a,b)=> a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
-  render(); updateUsage();
+async function loadAll(){
+  PIECES=(await allPieces()).sort((a,b)=>a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
+  TAGS=await getSetting("tags",[]); SETLISTS=await getSetting("setlists",[]);
+}
+async function refresh(){ await loadAll(); renderChips(); render(); updateUsage(); }
+
+function renderChips(){
+  const c=$("#filterChips"); c.innerHTML="";
+  const mk=(label,active,on,dot)=>{ const b=document.createElement("button"); b.className="chip"+(active?" on":"");
+    b.innerHTML=(dot?`<span class="dot" style="background:${dot}"></span>`:"")+label; b.onclick=on; c.appendChild(b); };
+  mk("Alle", VIEW.mode==="all", ()=>{ VIEW={mode:"all"}; renderChips(); render(); });
+  mk("★ Favoriten", VIEW.mode==="fav", ()=>{ VIEW={mode:"fav"}; renderChips(); render(); });
+  for(const t of TAGS) mk(t.name, VIEW.mode==="tag"&&VIEW.id===t.id, ()=>{ VIEW={mode:"tag",id:t.id}; renderChips(); render(); }, t.color);
+  for(const s of SETLISTS) mk("🎵 "+s.name, VIEW.mode==="setlist"&&VIEW.id===s.id, ()=>{ VIEW={mode:"setlist",id:s.id}; renderChips(); render(); });
+}
+function inView(p){
+  if(VIEW.mode==="fav") return !!p.fav;
+  if(VIEW.mode==="tag") return (p.tags||[]).includes(VIEW.id);
+  if(VIEW.mode==="setlist"){ const s=SETLISTS.find(x=>x.id===VIEW.id); return s? s.items.includes(p.id):false; }
+  return true;
 }
 function render(){
-  const q = FILTER.trim().toLowerCase();
-  const items = q ? PIECES.filter(p=> (p.title+" "+p.composer+" "+p.book).toLowerCase().includes(q)) : PIECES;
-  $("#count").textContent = PIECES.length + " Stücke" + (q? " · "+items.length+" gefunden" : "");
-  $("#empty").style.display = PIECES.length ? "none" : "block";
-  const ul = document.createElement("ul");
+  const q=FILTER.trim().toLowerCase();
+  let items=PIECES.filter(inView);
+  if(q) items=items.filter(p=>(p.title+" "+p.composer+" "+p.book).toLowerCase().includes(q));
+  $("#count").textContent=PIECES.length+" Stücke"+(VIEW.mode!=="all"||q? " · "+items.length+" angezeigt":"");
+  $("#empty").style.display=PIECES.length?"none":"block";
+  const ul=document.createElement("ul");
   for(const p of items){
-    const li = document.createElement("li"); li.className="piece";
-    const meta = [p.composer, p.book, fmtSize(pieceSize(p))].filter(Boolean).join(" · ");
-    li.innerHTML = `<div class="pinfo">
-        <div class="ptitle"></div><div class="pmeta"></div></div>
+    const li=document.createElement("li"); li.className="piece";
+    const meta=[p.composer,p.book,fmtSize(pieceSize(p))].filter(Boolean).join(" · ");
+    li.innerHTML=`<div class="pinfo"><div class="ptitle"></div><div class="pmeta"></div><div class="ptags"></div></div>
       <div class="pacts">
-        <button class="icobtn" data-a="view"  title="Ansehen">👁</button>
-        <button class="icobtn" data-a="edit"  title="Bearbeiten">✎</button>
-        <button class="icobtn" data-a="export" title="Exportieren">⤓</button>
-        <button class="icobtn" data-a="del"   title="Löschen">🗑</button>
+        <button class="icobtn star ${p.fav?"on":""}" data-a="fav" title="Favorit">${p.fav?"★":"☆"}</button>
+        <button class="icobtn" data-a="view" title="Ansehen">👁</button>
+        <button class="icobtn" data-a="more" title="Mehr">⋯</button>
       </div>`;
-    li.querySelector(".ptitle").textContent = p.title;
-    li.querySelector(".pmeta").textContent = meta;
-    li.querySelectorAll("[data-a]").forEach(btn=> btn.onclick = ()=> action(btn.dataset.a, p));
+    li.querySelector(".ptitle").textContent=p.title;
+    li.querySelector(".pmeta").textContent=meta;
+    const tg=li.querySelector(".ptags");
+    for(const tid of (p.tags||[])){ const t=tagById(tid); if(t){ const s=document.createElement("span"); s.className="ptag"; s.style.background=t.color; s.textContent=t.name; tg.appendChild(s); } }
+    li.querySelectorAll("[data-a]").forEach(btn=>btn.onclick=()=>action(btn.dataset.a,p));
     ul.appendChild(li);
   }
-  const list = $("#list"); list.innerHTML=""; list.appendChild(ul);
+  const list=$("#list"); list.innerHTML=""; list.appendChild(ul);
 }
-async function updateUsage(){
-  let txt = "Speicher: " + PIECES.length + " Stücke";
-  if(navigator.storage && navigator.storage.estimate){
-    try{ const e = await navigator.storage.estimate(); txt += " · " + fmtSize(e.usage) + " belegt"; }catch(_){}
-  }
-  $("#usage").textContent = txt;
-}
+async function updateUsage(){ let txt="Speicher: "+PIECES.length+" Stücke";
+  if(navigator.storage&&navigator.storage.estimate){ try{ const e=await navigator.storage.estimate(); txt+=" · "+fmtSize(e.usage)+" belegt"; }catch(_){} }
+  $("#usage").textContent=txt; }
 
 /* ---------- Aktionen ---------- */
-function action(a, p){
-  if(a==="view") openViewer(p);
-  else if(a==="edit") openEdit(p);
-  else if(a==="export") exportPiece(p);
-  else if(a==="del") confirmDelete(p);
+let sheetPiece=null;
+async function action(a,p){
+  if(a==="view") return openViewer(p);
+  if(a==="fav"){ p.fav=!p.fav; await putPiece(p); render(); return; }
+  if(a==="more"){ sheetPiece=p; $("#sheetTitle").textContent=p.title; $("#sheetOverlay").classList.add("on"); return; }
 }
-async function exportPiece(p){
-  const f = p.files[0]; const blob = await getBlob(f.blobId);
-  const url = URL.createObjectURL(blob); const a=document.createElement("a");
-  a.href=url; a.download = (p.title||"stueck")+".pdf"; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url), 4000);
-}
+$("#sheetClose").onclick=()=>$("#sheetOverlay").classList.remove("on");
+document.querySelectorAll("#sheetOverlay [data-s]").forEach(b=> b.onclick=()=>{
+  const s=b.dataset.s, p=sheetPiece; $("#sheetOverlay").classList.remove("on");
+  if(s==="edit") openEdit(p);
+  else if(s==="export") exportPiece(p);
+  else if(s==="del") confirmDelete(p);
+  else if(s==="tags") openTagPick(p);
+  else if(s==="setlist") openSetlistPick(p);
+});
+async function exportPiece(p){ const blob=await getBlob(p.files[0].blobId); dl(blob,(p.title||"stueck")+".pdf"); }
+function dl(blob,name){ const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000); }
 
 /* Edit */
 let editing=null;
 function openEdit(p){ editing=p; $("#fTitle").value=p.title||""; $("#fComposer").value=p.composer||""; $("#fBook").value=p.book||""; $("#editOverlay").classList.add("on"); }
-$("#editCancel").onclick = ()=> $("#editOverlay").classList.remove("on");
-$("#editSave").onclick = async ()=>{
-  if(!editing) return;
-  editing.title = $("#fTitle").value.trim() || editing.title;
-  editing.composer = $("#fComposer").value.trim();
-  editing.book = $("#fBook").value.trim();
-  await putPiece(editing); $("#editOverlay").classList.remove("on"); await refresh(); toast("Gespeichert");
-};
+$("#editCancel").onclick=()=>$("#editOverlay").classList.remove("on");
+$("#editSave").onclick=async()=>{ if(!editing)return; editing.title=$("#fTitle").value.trim()||editing.title; editing.composer=$("#fComposer").value.trim(); editing.book=$("#fBook").value.trim(); await putPiece(editing); $("#editOverlay").classList.remove("on"); await refresh(); toast("Gespeichert"); };
 
-/* Delete */
-let pendingDelete=null;
-function confirmDelete(p){ pendingDelete=p; $("#confirmText").textContent = p.title + " wird von diesem Gerät entfernt."; $("#confirmOverlay").classList.add("on"); }
-$("#confirmCancel").onclick = ()=> $("#confirmOverlay").classList.remove("on");
-$("#confirmOk").onclick = async ()=>{ if(pendingDelete){ await deletePiece(pendingDelete); pendingDelete=null; } $("#confirmOverlay").classList.remove("on"); await refresh(); toast("Gelöscht"); };
+/* Delete (simple confirm reuse via sheet) */
+async function confirmDelete(p){ if(!window.confirm(p.title+" wirklich löschen?")) return; await deletePieceRec(p); await refresh(); toast("Gelöscht"); }
 
-/* ---------- Import ---------- */
-$("#importBtn").onclick = ()=> $("#fileInput").click();
-$("#fileInput").onchange = async (e)=>{
-  const files = [...e.target.files].filter(f=> /pdf$/i.test(f.name) || f.type==="application/pdf");
-  if(!files.length) return;
-  let n=0;
-  for(const f of files){ try{ await addPieceFromFile(f); n++; toast("Importiere … "+n+"/"+files.length); }catch(err){ console.error(err); } }
-  e.target.value=""; await refresh(); toast(n+" Stück"+(n===1?"":"e")+" importiert");
-};
-
-/* ---------- Betrachter (PDF.js, Höhe einpassen) ---------- */
-let vDoc=null, vPage=1, vNum=1, vRendering=false;
-async function openViewer(p){
-  const blob = await getBlob(p.files[0].blobId);
-  const buf = await blob.arrayBuffer();
-  vDoc = await pdfjsLib.getDocument({data:buf}).promise;
-  vNum = vDoc.numPages; vPage = 1;
-  $("#vTitle").textContent = p.title;
-  $("#viewer").classList.add("on");
-  await renderPage();
+/* Tags: pick for a piece */
+let tagPickPiece=null;
+function openTagPick(p){ tagPickPiece=p; renderTagPick(); $("#tagPickOverlay").classList.add("on"); }
+function renderTagPick(){ const box=$("#tagPickList"); box.innerHTML="";
+  if(!TAGS.length){ box.innerHTML='<div class="sub">Noch keine Tags. Lege unten einen an.</div>'; }
+  for(const t of TAGS){ const row=document.createElement("label"); row.className="checkline";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=(tagPickPiece.tags||[]).includes(t.id);
+    cb.onchange=async()=>{ tagPickPiece.tags=tagPickPiece.tags||[]; if(cb.checked){ if(!tagPickPiece.tags.includes(t.id)) tagPickPiece.tags.push(t.id); } else { tagPickPiece.tags=tagPickPiece.tags.filter(x=>x!==t.id); } await putPiece(tagPickPiece); render(); };
+    const dot=document.createElement("span"); dot.className="dot"; dot.style.cssText="width:12px;height:12px;border-radius:50%;background:"+t.color;
+    row.appendChild(cb); row.appendChild(dot); row.appendChild(document.createTextNode(" "+t.name)); box.appendChild(row); }
 }
-async function renderPage(){
-  if(!vDoc || vRendering) return; vRendering=true;
-  const page = await vDoc.getPage(vPage);
-  const stage = $("#vStage");
-  const avail = stage.clientHeight - 8;
-  const base = page.getViewport({scale:1});
-  const scale = Math.max(0.2, avail / base.height);
-  const vp = page.getViewport({scale});
-  const canvas = $("#pdfcanvas"), ctx = canvas.getContext("2d");
-  const dpr = Math.min(window.devicePixelRatio||1, 2);
-  canvas.width = Math.floor(vp.width*dpr); canvas.height = Math.floor(vp.height*dpr);
-  canvas.style.width = Math.floor(vp.width)+"px"; canvas.style.height = Math.floor(vp.height)+"px";
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  await page.render({canvasContext:ctx, viewport:vp}).promise;
-  $("#vPage").textContent = vPage + " / " + vNum;
-  vRendering=false;
+$("#newTagAdd").onclick=async()=>{ const n=$("#newTagName").value.trim(); if(!n)return; await createTag(n); $("#newTagName").value=""; renderTagPick(); renderChips(); };
+$("#tagPickDone").onclick=()=>{ $("#tagPickOverlay").classList.remove("on"); };
+async function createTag(name){ const t={id:uid("t_"),name,color:PALETTE[TAGS.length%PALETTE.length]}; TAGS.push(t); await putSetting("tags",TAGS); return t; }
+
+/* Tag manager */
+$("#manageTags").onclick=()=>{ renderTagMgr(); $("#tagMgrOverlay").classList.add("on"); };
+$("#tagMgrClose").onclick=()=>$("#tagMgrOverlay").classList.remove("on");
+$("#mgrTagAdd").onclick=async()=>{ const n=$("#mgrTagName").value.trim(); if(!n)return; await createTag(n); $("#mgrTagName").value=""; renderTagMgr(); renderChips(); };
+function renderTagMgr(){ const box=$("#tagMgrList"); box.innerHTML="";
+  if(!TAGS.length) box.innerHTML='<div class="sub">Noch keine Tags.</div>';
+  for(const t of TAGS){ const row=document.createElement("div"); row.className="listrow";
+    const sw=document.createElement("span"); sw.className="swatch"; sw.style.background=t.color; sw.title="Farbe wechseln";
+    sw.onclick=async()=>{ t.color=PALETTE[(PALETTE.indexOf(t.color)+1)%PALETTE.length]; await putSetting("tags",TAGS); renderTagMgr(); renderChips(); render(); };
+    const nm=document.createElement("input"); nm.type="text"; nm.value=t.name; nm.style.flex="1";
+    nm.onchange=async()=>{ t.name=nm.value.trim()||t.name; await putSetting("tags",TAGS); renderChips(); render(); };
+    const del=document.createElement("button"); del.textContent="🗑"; del.className="icobtn";
+    del.onclick=async()=>{ if(!window.confirm("Tag „"+t.name+"“ löschen?"))return; TAGS=TAGS.filter(x=>x.id!==t.id); for(const p of PIECES){ if((p.tags||[]).includes(t.id)){ p.tags=p.tags.filter(x=>x!==t.id); await putPiece(p); } } await putSetting("tags",TAGS); if(VIEW.mode==="tag"&&VIEW.id===t.id) VIEW={mode:"all"}; renderTagMgr(); renderChips(); render(); };
+    row.appendChild(sw); row.appendChild(nm); row.appendChild(del); box.appendChild(row); }
 }
-$("#vClose").onclick = ()=>{ $("#viewer").classList.remove("on"); vDoc=null; };
-$("#vPrev").onclick = async ()=>{ if(vPage>1){ vPage--; await renderPage(); } };
-$("#vNext").onclick = async ()=>{ if(vPage<vNum){ vPage++; await renderPage(); } };
-window.addEventListener("keydown", e=>{
-  if(!$("#viewer").classList.contains("on")) return;
-  if(e.key==="ArrowLeft") $("#vPrev").click();
-  else if(e.key==="ArrowRight") $("#vNext").click();
-  else if(e.key==="Escape") $("#vClose").click();
-});
-// Wischen im Betrachter
+
+/* Setlists */
+let setlistMode="manage", setlistPiece=null;
+$("#manageSetlists").onclick=()=>{ setlistMode="manage"; $("#setlistTitle").textContent="Setlists"; renderSetlists(); $("#setlistOverlay").classList.add("on"); };
+$("#setlistClose").onclick=()=>$("#setlistOverlay").classList.remove("on");
+function openSetlistPick(p){ setlistMode="pick"; setlistPiece=p; $("#setlistTitle").textContent="Zu Setlist hinzufügen"; renderSetlists(); $("#setlistOverlay").classList.add("on"); }
+$("#newSetlistAdd").onclick=async()=>{ const n=$("#newSetlistName").value.trim(); if(!n)return; const s={id:uid("s_"),name:n,items:[]}; SETLISTS.push(s); await putSetting("setlists",SETLISTS); $("#newSetlistName").value=""; renderSetlists(); renderChips(); };
+function renderSetlists(){ const box=$("#setlistList"); box.innerHTML="";
+  if(!SETLISTS.length) box.innerHTML='<div class="sub">Noch keine Setlists.</div>';
+  for(const s of SETLISTS){ const row=document.createElement("div"); row.className="listrow";
+    const nm=document.createElement("div"); nm.style.flex="1"; nm.textContent=s.name+" ("+s.items.length+")";
+    row.appendChild(nm);
+    if(setlistMode==="pick"){ const has=s.items.includes(setlistPiece.id); const b=document.createElement("button"); b.className="icobtn"; b.textContent=has?"✓ drin":"＋";
+      b.onclick=async()=>{ if(has){ s.items=s.items.filter(x=>x!==setlistPiece.id); } else { s.items.push(setlistPiece.id); } await putSetting("setlists",SETLISTS); renderSetlists(); renderChips(); }; row.appendChild(b);
+    } else { const del=document.createElement("button"); del.className="icobtn"; del.textContent="🗑";
+      del.onclick=async()=>{ if(!window.confirm("Setlist „"+s.name+"“ löschen?"))return; SETLISTS=SETLISTS.filter(x=>x.id!==s.id); await putSetting("setlists",SETLISTS); if(VIEW.mode==="setlist"&&VIEW.id===s.id) VIEW={mode:"all"}; renderSetlists(); renderChips(); render(); }; row.appendChild(del); }
+    box.appendChild(row); }
+}
+
+/* Import PDFs */
+$("#importBtn").onclick=()=>$("#fileInput").click();
+$("#fileInput").onchange=async e=>{ const files=[...e.target.files].filter(f=>/pdf$/i.test(f.name)||f.type==="application/pdf"); if(!files.length)return;
+  let n=0; for(const f of files){ try{ await addPieceFromFile(f); n++; toast("Importiere … "+n+"/"+files.length); }catch(err){ console.error(err); } }
+  e.target.value=""; await refresh(); toast(n+" Stück"+(n===1?"":"e")+" importiert"); };
+
+/* ---------- Daten-Menü (Baustein 2): Listen als eigene Dateien ---------- */
+$("#dataMenuBtn").onclick=()=>$("#dataOverlay").classList.add("on");
+$("#dataClose").onclick=()=>$("#dataOverlay").classList.remove("on");
+function stamp(kind,extra){ return Object.assign({ app:"realbook", kind, schema:1, exportedAt:Date.now() }, extra); }
+function assignmentsExport(){ // Tag-Zuordnungen als stabile Referenzen (Titel|Buch)
+  const out=[]; for(const p of PIECES){ if((p.tags||[]).length){ out.push({ t:p.title, b:p.book, tags:p.tags.map(id=>{const x=tagById(id);return x?x.name:null;}).filter(Boolean) }); } } return out; }
+function exportData(kind){
+  let obj,name;
+  if(kind==="exp-tags"){ obj=stamp("tags",{ tags:TAGS.map(t=>({name:t.name,color:t.color})), assign:assignmentsExport() }); name="tags.realbook.json"; }
+  else if(kind==="exp-setlists"){ obj=stamp("setlists",{ setlists:SETLISTS.map(s=>({ name:s.name, items:s.items.map(id=>{const p=PIECES.find(x=>x.id===id);return p?{t:p.title,b:p.book}:null;}).filter(Boolean) })) }); name="setlists.realbook.json"; }
+  else if(kind==="exp-fav"){ obj=stamp("favorites",{ items:PIECES.filter(p=>p.fav).map(p=>({t:p.title,b:p.book})) }); name="favoriten.realbook.json"; }
+  else { obj=stamp("bundle",{ tags:TAGS.map(t=>({name:t.name,color:t.color})), assign:assignmentsExport(),
+      setlists:SETLISTS.map(s=>({name:s.name,items:s.items.map(id=>{const p=PIECES.find(x=>x.id===id);return p?{t:p.title,b:p.book}:null;}).filter(Boolean)})),
+      favorites:PIECES.filter(p=>p.fav).map(p=>({t:p.title,b:p.book})) }); name="einstellungen.realbook.json"; }
+  dl(new Blob([JSON.stringify(obj,null,1)],{type:"application/json"}), name);
+  toast("Exportiert: "+name);
+}
+document.querySelectorAll("#dataOverlay [data-d]").forEach(b=> b.onclick=()=>{ const d=b.dataset.d; if(d==="import"){ $("#settingsImport").click(); } else { exportData(d); } $("#dataOverlay").classList.remove("on"); });
+$("#settingsImport").onchange=async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f)return;
+  let obj; try{ obj=JSON.parse(await f.text()); }catch(_){ return toast("Datei nicht lesbar"); }
+  await mergeSettings(obj); await refresh(); toast("Zusammengeführt"); };
+
+function findPieceByRef(ref){ const k=(ref.t||"").toLowerCase().trim()+"|"+(ref.b||"").toLowerCase().trim();
+  return PIECES.find(p=>refKey(p)===k) || PIECES.find(p=>(p.title||"").toLowerCase().trim()===(ref.t||"").toLowerCase().trim()); }
+async function mergeSettings(obj){
+  const kinds=obj.kind==="bundle"? ["tags","setlists","favorites"] : [obj.kind];
+  // Tags
+  if((kinds.includes("tags")) && obj.tags){
+    for(const td of obj.tags){ if(!TAGS.find(t=>t.name.toLowerCase()===td.name.toLowerCase())) TAGS.push({id:uid("t_"),name:td.name,color:td.color||PALETTE[TAGS.length%PALETTE.length]}); }
+    await putSetting("tags",TAGS);
+    for(const a of (obj.assign||[])){ const p=findPieceByRef(a); if(!p)continue; p.tags=p.tags||[];
+      for(const tn of a.tags){ const t=TAGS.find(x=>x.name.toLowerCase()===tn.toLowerCase()); if(t&&!p.tags.includes(t.id)) p.tags.push(t.id); } await putPiece(p); }
+  }
+  // Setlists
+  if(kinds.includes("setlists") && obj.setlists){
+    for(const sd of obj.setlists){ let s=SETLISTS.find(x=>x.name.toLowerCase()===sd.name.toLowerCase()); if(!s){ s={id:uid("s_"),name:sd.name,items:[]}; SETLISTS.push(s); }
+      for(const ref of (sd.items||[])){ const p=findPieceByRef(ref); if(p&&!s.items.includes(p.id)) s.items.push(p.id); } }
+    await putSetting("setlists",SETLISTS);
+  }
+  // Favorites
+  if(kinds.includes("favorites") && obj.favorites){
+    for(const ref of obj.favorites){ const p=findPieceByRef(ref); if(p&&!p.fav){ p.fav=true; await putPiece(p); } }
+  }
+}
+
+/* ---------- Betrachter ---------- */
+let vDoc=null,vPage=1,vNum=1,vRendering=false;
+async function openViewer(p){ const blob=await getBlob(p.files[0].blobId); const buf=await blob.arrayBuffer();
+  vDoc=await pdfjsLib.getDocument({data:buf}).promise; vNum=vDoc.numPages; vPage=1; $("#vTitle").textContent=p.title; $("#viewer").classList.add("on"); await renderPage(); }
+async function renderPage(){ if(!vDoc||vRendering)return; vRendering=true;
+  const page=await vDoc.getPage(vPage); const stage=$("#vStage"); const avail=stage.clientHeight-8;
+  const base=page.getViewport({scale:1}); const scale=Math.max(0.2,avail/base.height); const vp=page.getViewport({scale});
+  const canvas=$("#pdfcanvas"),ctx=canvas.getContext("2d"); const dpr=Math.min(window.devicePixelRatio||1,2);
+  canvas.width=Math.floor(vp.width*dpr); canvas.height=Math.floor(vp.height*dpr);
+  canvas.style.width=Math.floor(vp.width)+"px"; canvas.style.height=Math.floor(vp.height)+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0); await page.render({canvasContext:ctx,viewport:vp}).promise;
+  $("#vPage").textContent=vPage+" / "+vNum; vRendering=false; }
+$("#vClose").onclick=()=>{ $("#viewer").classList.remove("on"); vDoc=null; };
+$("#vPrev").onclick=async()=>{ if(vPage>1){ vPage--; await renderPage(); } };
+$("#vNext").onclick=async()=>{ if(vPage<vNum){ vPage++; await renderPage(); } };
+window.addEventListener("keydown",e=>{ if(!$("#viewer").classList.contains("on"))return;
+  if(e.key==="ArrowLeft")$("#vPrev").click(); else if(e.key==="ArrowRight")$("#vNext").click(); else if(e.key==="Escape")$("#vClose").click(); });
 let tx0=null;
-$("#vStage").addEventListener("touchstart", e=>{ tx0 = e.touches[0].clientX; }, {passive:true});
-$("#vStage").addEventListener("touchend", e=>{
-  if(tx0==null) return; const dx = e.changedTouches[0].clientX - tx0; tx0=null;
-  if(Math.abs(dx)>50){ if(dx<0) $("#vNext").click(); else $("#vPrev").click(); }
-}, {passive:true});
-let _rz; window.addEventListener("resize", ()=>{ clearTimeout(_rz); _rz=setTimeout(()=>{ if(vDoc) renderPage(); },200); });
-
-/* Sichern (ganze Sammlung als JSON-Manifest — Dateien folgen im nächsten Baustein) */
-$("#exportAllBtn").onclick = async ()=>{
-  const manifest = { app:"realbook", kind:"library-manifest", version:1, exportedAt:Date.now(),
-    pieces: PIECES.map(p=>({ title:p.title, composer:p.composer, book:p.book, source:p.source, files:(p.files||[]).map(f=>({role:f.role,name:f.name,size:f.size})) })) };
-  const blob = new Blob([JSON.stringify(manifest,null,1)], {type:"application/json"});
-  const url = URL.createObjectURL(blob); const a=document.createElement("a");
-  a.href=url; a.download="meine-sammlung.json"; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),4000);
-  toast("Übersicht gesichert (Dateien folgen im nächsten Schritt)");
-};
+$("#vStage").addEventListener("touchstart",e=>{ tx0=e.touches[0].clientX; },{passive:true});
+$("#vStage").addEventListener("touchend",e=>{ if(tx0==null)return; const dx=e.changedTouches[0].clientX-tx0; tx0=null; if(Math.abs(dx)>50){ if(dx<0)$("#vNext").click(); else $("#vPrev").click(); } },{passive:true});
+let _rz; window.addEventListener("resize",()=>{ clearTimeout(_rz); _rz=setTimeout(()=>{ if(vDoc)renderPage(); },200); });
 
 /* Suche */
-$("#search").addEventListener("input", e=>{ FILTER=e.target.value; render(); });
-
-/* Persistenten Speicher anfordern (weniger Räumungsrisiko) */
-if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
-
-/* Start */
+$("#search").addEventListener("input",e=>{ FILTER=e.target.value; render(); });
+if(navigator.storage&&navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
 openDB().then(refresh).catch(err=>{ console.error(err); $("#empty").innerHTML="<p>Speicher konnte nicht geöffnet werden.</p>"; });
-window.__ready = true;
+window.__ready=true;
 </script>
 </body>
 </html>
