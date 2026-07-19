@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Realbook v2 — Sammlung (Prototyp)</title>
+<style>
+  :root{ --bg:#f6f6f4; --card:#fff; --ink:#1c1c1e; --muted:#6b7280; --line:#e5e7eb; --accent:#2f6df6; --danger:#d64545; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  header{ position:sticky; top:0; z-index:5; background:var(--card); border-bottom:1px solid var(--line);
+    padding:calc(env(safe-area-inset-top) + 10px) 14px 10px; }
+  .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  h1{ font-size:18px; margin:0; font-weight:700; }
+  .sub{ color:var(--muted); font-size:12px; margin-top:2px; }
+  button,.btn{ font:inherit; border:1px solid var(--line); background:var(--card); color:var(--ink);
+    padding:8px 12px; border-radius:10px; cursor:pointer; }
+  button.primary{ background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600; }
+  button.ghost{ background:transparent; }
+  button:active{ transform:translateY(1px); }
+  #search{ flex:1; min-width:140px; padding:9px 12px; border:1px solid var(--line); border-radius:10px; }
+  main{ padding:12px 14px 40px; }
+  .empty{ text-align:center; color:var(--muted); padding:48px 16px; }
+  .empty b{ color:var(--ink); }
+  ul{ list-style:none; margin:0; padding:0; }
+  li.piece{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px;
+    margin-bottom:8px; display:flex; align-items:center; gap:10px; }
+  .pinfo{ flex:1; min-width:0; }
+  .ptitle{ font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pmeta{ color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pacts{ display:flex; gap:6px; }
+  .icobtn{ padding:7px 9px; border-radius:9px; }
+  .bar{ position:fixed; left:0; right:0; bottom:0; background:var(--card); border-top:1px solid var(--line);
+    padding:8px 14px calc(env(safe-area-inset-bottom) + 8px); display:flex; gap:8px; align-items:center; }
+  .grow{ flex:1; }
+  .usage{ color:var(--muted); font-size:12px; }
+  /* Modal */
+  .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:20; padding:16px; }
+  .overlay.on{ display:flex; }
+  .modal{ background:var(--card); border-radius:14px; width:min(460px,100%); max-height:90vh; overflow:auto; padding:16px; }
+  .modal h2{ font-size:16px; margin:0 0 12px; }
+  label{ display:block; font-size:12px; color:var(--muted); margin:10px 0 4px; }
+  input[type=text]{ width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:9px; font:inherit; }
+  .modal .row{ justify-content:flex-end; margin-top:16px; }
+  /* Viewer */
+  .viewer{ position:fixed; inset:0; background:#111; display:none; flex-direction:column; z-index:30; }
+  .viewer.on{ display:flex; }
+  .vtop{ display:flex; align-items:center; gap:8px; padding:calc(env(safe-area-inset-top) + 8px) 12px 8px; color:#fff; }
+  .vtop .vt{ flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
+  .vtop button{ background:#2a2a2e; color:#fff; border-color:#3a3a3e; }
+  .vstage{ flex:1; overflow:auto; display:flex; align-items:center; justify-content:center; }
+  #pdfcanvas{ max-width:100%; box-shadow:0 2px 16px rgba(0,0,0,.5); background:#fff; }
+  .vnav{ display:flex; align-items:center; justify-content:center; gap:16px; color:#fff;
+    padding:8px 12px calc(env(safe-area-inset-bottom) + 8px); }
+  .vnav button{ background:#2a2a2e; color:#fff; border-color:#3a3a3e; min-width:64px; }
+  .toast{ position:fixed; left:50%; bottom:80px; transform:translateX(-50%); background:#111; color:#fff;
+    padding:10px 16px; border-radius:20px; font-size:14px; opacity:0; transition:opacity .2s; z-index:50; pointer-events:none; }
+  .toast.on{ opacity:.95; }
+  .badge{ display:inline-block; background:#eef2ff; color:#3556c9; border-radius:20px; padding:1px 8px; font-size:11px; margin-left:6px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <div class="grow">
+      <h1>Realbook — meine Sammlung <span class="badge">v2 · Prototyp</span></h1>
+      <div class="sub" id="count">0 Stücke</div>
+    </div>
+    <button class="primary" id="importBtn">＋ Importieren</button>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <input id="search" type="search" placeholder="Suche nach Titel, Komponist, Buch …" autocomplete="off">
+  </div>
+  <input id="fileInput" type="file" accept="application/pdf,.pdf" multiple hidden>
+</header>
+
+<main>
+  <div id="list"></div>
+  <div class="empty" id="empty">
+    <p>📚 <b>Noch keine Stücke.</b></p>
+    <p>Tippe oben auf <b>＋ Importieren</b> und wähle eine oder mehrere PDF-Dateien aus.<br>
+       Sie werden lokal auf diesem Gerät gespeichert — getrennt von der App.</p>
+  </div>
+</main>
+
+<div class="bar">
+  <div class="usage" id="usage">Speicher: —</div>
+  <div class="grow"></div>
+  <button class="ghost" id="exportAllBtn" title="Ganze Sammlung sichern">⤓ Sichern</button>
+</div>
+
+<!-- Edit modal -->
+<div class="overlay" id="editOverlay">
+  <div class="modal">
+    <h2>Stück bearbeiten</h2>
+    <label>Titel</label><input type="text" id="fTitle">
+    <label>Komponist / Interpret</label><input type="text" id="fComposer">
+    <label>Buch / Quelle</label><input type="text" id="fBook">
+    <div class="row">
+      <button class="ghost" id="editCancel">Abbrechen</button>
+      <button class="primary" id="editSave">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm modal -->
+<div class="overlay" id="confirmOverlay">
+  <div class="modal">
+    <h2 id="confirmTitle">Löschen?</h2>
+    <div id="confirmText" class="sub"></div>
+    <div class="row">
+      <button class="ghost" id="confirmCancel">Abbrechen</button>
+      <button class="primary" id="confirmOk" style="background:var(--danger);border-color:var(--danger)">Löschen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Viewer -->
+<div class="viewer" id="viewer">
+  <div class="vtop">
+    <div class="vt" id="vTitle"></div>
+    <button id="vClose">✕ Schließen</button>
+  </div>
+  <div class="vstage" id="vStage"><canvas id="pdfcanvas"></canvas></div>
+  <div class="vnav">
+    <button id="vPrev">‹ Zurück</button>
+    <span id="vPage">1 / 1</span>
+    <button id="vNext">Weiter ›</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="vendor/pdfjs/pdf.min.js"></script>
+<script>
+"use strict";
+pdfjsLib.GlobalWorkerOptions.workerSrc = "vendor/pdfjs/pdf.worker.min.js";
+
+/* ---------- IndexedDB: die Sammlung ---------- */
+const DB_NAME = "realbook_lib", DB_VER = 1;
+let _db = null;
+function openDB(){
+  return new Promise((res, rej)=>{
+    const r = indexedDB.open(DB_NAME, DB_VER);
+    r.onupgradeneeded = e=>{
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains("pieces")) db.createObjectStore("pieces", {keyPath:"id"});
+      if(!db.objectStoreNames.contains("blobs"))  db.createObjectStore("blobs",  {keyPath:"id"});
+    };
+    r.onsuccess = ()=>{ _db=r.result; res(_db); };
+    r.onerror  = ()=>rej(r.error);
+  });
+}
+function tx(stores, mode){ return _db.transaction(stores, mode); }
+function reqP(req){ return new Promise((res,rej)=>{ req.onsuccess=()=>res(req.result); req.onerror=()=>rej(req.error); }); }
+const uid = ()=> "p_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+async function addPieceFromFile(file){
+  const id = uid(), blobId = "b_"+id;
+  const title = file.name.replace(/\.pdf$/i,"").replace(/_/g," ").trim() || "Ohne Titel";
+  const piece = { id, title, composer:"", book:"Import", source:"", createdAt:Date.now(),
+                  files:[{ role:"score", blobId, name:file.name, size:file.size }] };
+  const t = tx(["pieces","blobs"],"readwrite");
+  await Promise.all([ reqP(t.objectStore("blobs").put({id:blobId, blob:file})),
+                      reqP(t.objectStore("pieces").put(piece)) ]);
+  return piece;
+}
+async function allPieces(){ return reqP(tx("pieces","readonly").objectStore("pieces").getAll()); }
+async function putPiece(p){ return reqP(tx("pieces","readwrite").objectStore("pieces").put(p)); }
+async function getBlob(blobId){ const r = await reqP(tx("blobs","readonly").objectStore("blobs").get(blobId)); return r && r.blob; }
+async function deletePiece(p){
+  const t = tx(["pieces","blobs"],"readwrite");
+  for(const f of (p.files||[])) t.objectStore("blobs").delete(f.blobId);
+  t.objectStore("pieces").delete(p.id);
+  return new Promise((res,rej)=>{ t.oncomplete=res; t.onerror=()=>rej(t.error); });
+}
+
+/* ---------- Zustand + Helfer ---------- */
+let PIECES = [], FILTER = "";
+const $ = s=>document.querySelector(s);
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("on"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("on"),1800); }
+function fmtSize(b){ if(b>=1e6) return (b/1e6).toFixed(1)+" MB"; if(b>=1e3) return Math.round(b/1e3)+" KB"; return b+" B"; }
+function pieceSize(p){ return (p.files||[]).reduce((s,f)=>s+(f.size||0),0); }
+
+async function refresh(){
+  PIECES = (await allPieces()).sort((a,b)=> a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
+  render(); updateUsage();
+}
+function render(){
+  const q = FILTER.trim().toLowerCase();
+  const items = q ? PIECES.filter(p=> (p.title+" "+p.composer+" "+p.book).toLowerCase().includes(q)) : PIECES;
+  $("#count").textContent = PIECES.length + " Stücke" + (q? " · "+items.length+" gefunden" : "");
+  $("#empty").style.display = PIECES.length ? "none" : "block";
+  const ul = document.createElement("ul");
+  for(const p of items){
+    const li = document.createElement("li"); li.className="piece";
+    const meta = [p.composer, p.book, fmtSize(pieceSize(p))].filter(Boolean).join(" · ");
+    li.innerHTML = `<div class="pinfo">
+        <div class="ptitle"></div><div class="pmeta"></div></div>
+      <div class="pacts">
+        <button class="icobtn" data-a="view"  title="Ansehen">👁</button>
+        <button class="icobtn" data-a="edit"  title="Bearbeiten">✎</button>
+        <button class="icobtn" data-a="export" title="Exportieren">⤓</button>
+        <button class="icobtn" data-a="del"   title="Löschen">🗑</button>
+      </div>`;
+    li.querySelector(".ptitle").textContent = p.title;
+    li.querySelector(".pmeta").textContent = meta;
+    li.querySelectorAll("[data-a]").forEach(btn=> btn.onclick = ()=> action(btn.dataset.a, p));
+    ul.appendChild(li);
+  }
+  const list = $("#list"); list.innerHTML=""; list.appendChild(ul);
+}
+async function updateUsage(){
+  let txt = "Speicher: " + PIECES.length + " Stücke";
+  if(navigator.storage && navigator.storage.estimate){
+    try{ const e = await navigator.storage.estimate(); txt += " · " + fmtSize(e.usage) + " belegt"; }catch(_){}
+  }
+  $("#usage").textContent = txt;
+}
+
+/* ---------- Aktionen ---------- */
+function action(a, p){
+  if(a==="view") openViewer(p);
+  else if(a==="edit") openEdit(p);
+  else if(a==="export") exportPiece(p);
+  else if(a==="del") confirmDelete(p);
+}
+async function exportPiece(p){
+  const f = p.files[0]; const blob = await getBlob(f.blobId);
+  const url = URL.createObjectURL(blob); const a=document.createElement("a");
+  a.href=url; a.download = (p.title||"stueck")+".pdf"; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+
+/* Edit */
+let editing=null;
+function openEdit(p){ editing=p; $("#fTitle").value=p.title||""; $("#fComposer").value=p.composer||""; $("#fBook").value=p.book||""; $("#editOverlay").classList.add("on"); }
+$("#editCancel").onclick = ()=> $("#editOverlay").classList.remove("on");
+$("#editSave").onclick = async ()=>{
+  if(!editing) return;
+  editing.title = $("#fTitle").value.trim() || editing.title;
+  editing.composer = $("#fComposer").value.trim();
+  editing.book = $("#fBook").value.trim();
+  await putPiece(editing); $("#editOverlay").classList.remove("on"); await refresh(); toast("Gespeichert");
+};
+
+/* Delete */
+let pendingDelete=null;
+function confirmDelete(p){ pendingDelete=p; $("#confirmText").textContent = p.title + " wird von diesem Gerät entfernt."; $("#confirmOverlay").classList.add("on"); }
+$("#confirmCancel").onclick = ()=> $("#confirmOverlay").classList.remove("on");
+$("#confirmOk").onclick = async ()=>{ if(pendingDelete){ await deletePiece(pendingDelete); pendingDelete=null; } $("#confirmOverlay").classList.remove("on"); await refresh(); toast("Gelöscht"); };
+
+/* ---------- Import ---------- */
+$("#importBtn").onclick = ()=> $("#fileInput").click();
+$("#fileInput").onchange = async (e)=>{
+  const files = [...e.target.files].filter(f=> /pdf$/i.test(f.name) || f.type==="application/pdf");
+  if(!files.length) return;
+  let n=0;
+  for(const f of files){ try{ await addPieceFromFile(f); n++; toast("Importiere … "+n+"/"+files.length); }catch(err){ console.error(err); } }
+  e.target.value=""; await refresh(); toast(n+" Stück"+(n===1?"":"e")+" importiert");
+};
+
+/* ---------- Betrachter (PDF.js, Höhe einpassen) ---------- */
+let vDoc=null, vPage=1, vNum=1, vRendering=false;
+async function openViewer(p){
+  const blob = await getBlob(p.files[0].blobId);
+  const buf = await blob.arrayBuffer();
+  vDoc = await pdfjsLib.getDocument({data:buf}).promise;
+  vNum = vDoc.numPages; vPage = 1;
+  $("#vTitle").textContent = p.title;
+  $("#viewer").classList.add("on");
+  await renderPage();
+}
+async function renderPage(){
+  if(!vDoc || vRendering) return; vRendering=true;
+  const page = await vDoc.getPage(vPage);
+  const stage = $("#vStage");
+  const avail = stage.clientHeight - 8;
+  const base = page.getViewport({scale:1});
+  const scale = Math.max(0.2, avail / base.height);
+  const vp = page.getViewport({scale});
+  const canvas = $("#pdfcanvas"), ctx = canvas.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio||1, 2);
+  canvas.width = Math.floor(vp.width*dpr); canvas.height = Math.floor(vp.height*dpr);
+  canvas.style.width = Math.floor(vp.width)+"px"; canvas.style.height = Math.floor(vp.height)+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  await page.render({canvasContext:ctx, viewport:vp}).promise;
+  $("#vPage").textContent = vPage + " / " + vNum;
+  vRendering=false;
+}
+$("#vClose").onclick = ()=>{ $("#viewer").classList.remove("on"); vDoc=null; };
+$("#vPrev").onclick = async ()=>{ if(vPage>1){ vPage--; await renderPage(); } };
+$("#vNext").onclick = async ()=>{ if(vPage<vNum){ vPage++; await renderPage(); } };
+window.addEventListener("keydown", e=>{
+  if(!$("#viewer").classList.contains("on")) return;
+  if(e.key==="ArrowLeft") $("#vPrev").click();
+  else if(e.key==="ArrowRight") $("#vNext").click();
+  else if(e.key==="Escape") $("#vClose").click();
+});
+// Wischen im Betrachter
+let tx0=null;
+$("#vStage").addEventListener("touchstart", e=>{ tx0 = e.touches[0].clientX; }, {passive:true});
+$("#vStage").addEventListener("touchend", e=>{
+  if(tx0==null) return; const dx = e.changedTouches[0].clientX - tx0; tx0=null;
+  if(Math.abs(dx)>50){ if(dx<0) $("#vNext").click(); else $("#vPrev").click(); }
+}, {passive:true});
+let _rz; window.addEventListener("resize", ()=>{ clearTimeout(_rz); _rz=setTimeout(()=>{ if(vDoc) renderPage(); },200); });
+
+/* Sichern (ganze Sammlung als JSON-Manifest — Dateien folgen im nächsten Baustein) */
+$("#exportAllBtn").onclick = async ()=>{
+  const manifest = { app:"realbook", kind:"library-manifest", version:1, exportedAt:Date.now(),
+    pieces: PIECES.map(p=>({ title:p.title, composer:p.composer, book:p.book, source:p.source, files:(p.files||[]).map(f=>({role:f.role,name:f.name,size:f.size})) })) };
+  const blob = new Blob([JSON.stringify(manifest,null,1)], {type:"application/json"});
+  const url = URL.createObjectURL(blob); const a=document.createElement("a");
+  a.href=url; a.download="meine-sammlung.json"; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+  toast("Übersicht gesichert (Dateien folgen im nächsten Schritt)");
+};
+
+/* Suche */
+$("#search").addEventListener("input", e=>{ FILTER=e.target.value; render(); });
+
+/* Persistenten Speicher anfordern (weniger Räumungsrisiko) */
+if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
+
+/* Start */
+openDB().then(refresh).catch(err=>{ console.error(err); $("#empty").innerHTML="<p>Speicher konnte nicht geöffnet werden.</p>"; });
+window.__ready = true;
+</script>
+</body>
+</html>
