@@ -1206,6 +1206,61 @@ function importData(file){
     }catch(e){ alert('Import fehlgeschlagen: '+e.message); } };
   r.readAsText(file);
 }
+/* ---- Baustein 2: Einstellungen als EINZELNE Dateien (je mit Versionskennung) ---- */
+const PART_META={ setlists:{label:'Setlists',file:'setlists'}, tags:{label:'Tags',file:'tags'},
+  favorites:{label:'Favoriten',file:'favoriten'}, practice:{label:'Üben-Liste',file:'ueben'} };
+function partPayload(kind){
+  const base={schema:1, app:'realbook', kind, exportedAt:new Date().toISOString()};
+  if(kind==='setlists') return {...base, sets:S.sets};
+  if(kind==='tags')     return {...base, tags:S.tags, tuneTags:S.tuneTags};
+  if(kind==='favorites')return {...base, fav:[...S.fav]};
+  if(kind==='practice') return {...base, prac:[...S.prac]};
+  return base;
+}
+function downloadJSON(obj, name){
+  const blob=new Blob([JSON.stringify(obj,null,1)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=name; document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function exportPart(kind){ const m=PART_META[kind]; if(!m) return;
+  downloadJSON(partPayload(kind), 'realbook-'+m.file+'-'+new Date().toISOString().slice(0,10)+'.json'); }
+/* Merge-Bausteine: neuere Version gewinnt (updatedAt); Favoriten/Üben = Vereinigung */
+function mergeSets(arr){ const by=Object.fromEntries(S.sets.map(s=>[s.id,s])); let added=0,updated=0;
+  (arr||[]).forEach(s=>{ if(!s||!s.id)return; const ex=by[s.id];
+    if(!ex){ S.sets.push(s); by[s.id]=s; added++; }
+    else if((s.updatedAt||0)>(ex.updatedAt||0)){ Object.assign(ex,s); updated++; } });
+  return {added,updated}; }
+function mergeTags(tags,tuneTags){ const by=Object.fromEntries(S.tags.map(t=>[t.id,t])); let added=0,updated=0;
+  (tags||[]).forEach(t=>{ if(!t||!t.id)return; const ex=by[t.id];
+    if(!ex){ S.tags.push(t); by[t.id]=t; added++; }
+    else if((t.updatedAt||0)>(ex.updatedAt||0)){ Object.assign(ex,t); updated++; } });
+  const inTags=id=>S.tags.some(t=>t.id===id);
+  for(const k in (tuneTags||{})){ const cur=new Set(S.tuneTags[k]||[]);
+    (tuneTags[k]||[]).forEach(id=>cur.add(id)); const a=[...cur].filter(inTags);
+    if(a.length)S.tuneTags[k]=a; else delete S.tuneTags[k]; }
+  return {added,updated}; }
+function importPart(file){
+  const r=new FileReader();
+  r.onload=()=>{ try{
+      const obj=JSON.parse(r.result);
+      if(!obj||typeof obj!=='object') throw new Error('Ungültige Datei');
+      let msg;
+      if(obj.kind==='setlists'){ const b=S.sets.length; const {added,updated}=mergeSets(obj.sets);
+        msg='Setlists: '+b+' → '+S.sets.length+' ('+added+' neu, '+updated+' aktualisiert)'; }
+      else if(obj.kind==='tags'){ const b=S.tags.length; const {added,updated}=mergeTags(obj.tags,obj.tuneTags);
+        msg='Tags: '+b+' → '+S.tags.length+' ('+added+' neu, '+updated+' aktualisiert)'; }
+      else if(obj.kind==='favorites'){ const b=S.fav.size; (obj.fav||[]).forEach(k=>S.fav.add(k));
+        msg='Favoriten: '+b+' → '+S.fav.size; }
+      else if(obj.kind==='practice'){ const b=S.prac.size; (obj.prac||[]).forEach(k=>S.prac.add(k));
+        msg='Üben-Liste: '+b+' → '+S.prac.size; }
+      else { mergeState(obj); msg='Gesamtdatei zusammengeführt (Setlists '+S.sets.length+', Tags '+S.tags.length+').'; }
+      save(); render();
+      alert('Import zusammengeführt.\n'+msg);
+      closeSheet();
+    }catch(e){ alert('Import fehlgeschlagen: '+e.message); } };
+  r.readAsText(file);
+}
 let precacheState={running:false,done:0,total:0};
 navigator.serviceWorker && navigator.serviceWorker.addEventListener('message', e=>{
   const m=e.data||{};
@@ -1233,7 +1288,23 @@ function openDataSheet(){
       +'<input type="file" id="impFile" accept="application/json,.json" style="display:none">';
     card.append(r1);
     card.insertAdjacentHTML('beforeend','<div class="muted" style="margin:2px 2px 14px">Import wird <b>zusammengeführt</b> (nichts wird gelöscht; bei Konflikten gewinnt der neuere Stand).</div>');
-    const rn=document.createElement('div'); rn.style.cssText='border-top:1px solid var(--line);padding-top:14px';
+    // Baustein 2: einzeln sichern & teilen
+    const rp=document.createElement('div'); rp.style.cssText='border-top:1px solid var(--line);padding-top:14px';
+    rp.innerHTML='<div class="lbl" style="margin:0 0 8px">Einzeln sichern &amp; teilen</div>'
+      +'<div class="row" style="margin:0 0 8px;flex-wrap:wrap;gap:8px">'
+      +'<button class="btn ghost" data-part="setlists" style="flex:1 1 46%">⬇︎ Setlists</button>'
+      +'<button class="btn ghost" data-part="tags" style="flex:1 1 46%">⬇︎ Tags</button>'
+      +'<button class="btn ghost" data-part="favorites" style="flex:1 1 46%">⬇︎ Favoriten</button>'
+      +'<button class="btn ghost" data-part="practice" style="flex:1 1 46%">⬇︎ Üben-Liste</button>'
+      +'</div>'
+      +'<button class="btn ghost" id="impPart" style="width:100%">⬆︎ Einzelne Datei einlesen</button>'
+      +'<input type="file" id="impPartFile" accept="application/json,.json" style="display:none">'
+      +'<div class="muted" style="margin-top:6px">Jede Datei trägt eine Kennung – beim Einlesen wird automatisch erkannt, worum es sich handelt, und sauber zusammengeführt.</div>';
+    card.append(rp);
+    rp.querySelectorAll('[data-part]').forEach(btn=>btn.onclick=()=>exportPart(btn.dataset.part));
+    rp.querySelector('#impPart').onclick=()=>rp.querySelector('#impPartFile').click();
+    rp.querySelector('#impPartFile').onchange=e=>{ if(e.target.files[0]) importPart(e.target.files[0]); };
+    const rn=document.createElement('div'); rn.style.cssText='border-top:1px solid var(--line);padding-top:14px;margin-top:14px';
     rn.innerHTML='<div class="lbl" style="margin:0 0 8px">Dein Name (für Notizen)</div>'
       +'<input class="txt" id="editorName" placeholder="z. B. Jens" value="'+esc(getEditorName())+'">'
       +'<div class="muted" style="margin-top:6px">Wird als „Bearbeitet von" an deine handschriftlichen Notizen gehängt (der Browser kann den System-Anmeldenamen nicht auslesen).</div>';
@@ -1653,7 +1724,7 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-19 · Import v2';
+const APP_BUILD='2026-07-19 · Baustein 2';
 (function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
