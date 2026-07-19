@@ -1367,6 +1367,7 @@ function showEditorPage(i){
   stack.style.width=(pg.w*scale)+'px'; stack.style.height=(pg.h*scale)+'px';
   const bgC=document.createElement('canvas'); bgC.width=pg.w; bgC.height=pg.h; bgC.style.width='100%'; bgC.style.height='100%'; bgC.getContext('2d').drawImage(pg.bg,0,0);
   const drawC=document.createElement('canvas'); drawC.className='draw'; drawC.width=pg.w; drawC.height=pg.h; drawC.style.width='100%'; drawC.style.height='100%';
+  try{ drawC.getContext('2d',{desynchronized:true}); }catch(_){}  // latenzarmer Zeichen-Modus (falls unterstützt)
   stack.append(bgC,drawC); stage.append(stack); ED.drawC=drawC; ED.stackEl=stack;
   ED.base=document.createElement('canvas'); ED.base.width=pg.w; ED.base.height=pg.h;
   ED.zoom=1; ED.panX=0; ED.panY=0; applyZoom();
@@ -1389,21 +1390,32 @@ function drawStroke(ctx,s){
   ctx.globalCompositeOperation='source-over';
 }
 function bindDraw(c){
-  const pt=e=>{ const r=c.getBoundingClientRect(); return {x:(e.clientX-r.left)*(c.width/r.width),y:(e.clientY-r.top)*(c.height/r.height),p:(e.pressure&&e.pressure>0)?e.pressure:0.5}; };
+  let rect=null; const sx=()=>c.width/rect.width, sy=()=>c.height/rect.height;
+  const pt=e=>({ x:(e.clientX-rect.left)*sx(), y:(e.clientY-rect.top)*sy(), p:(e.pressure&&e.pressure>0)?e.pressure:0.5 });
+  function seg(ctx,a,b,s){ ctx.globalCompositeOperation=s.erase?'destination-out':'source-over';
+    ctx.strokeStyle=s.color; ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.lineWidth=s.erase? s.w : s.w*(0.5+1.3*(b.p||0.5));
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    ctx.globalCompositeOperation='source-over'; }
   c.addEventListener('pointerdown',e=>{
     if(e.pointerType==='pen')ED.penSeen=true;
     if(ED.penSeen&&e.pointerType==='touch')return;
     e.preventDefault(); try{c.setPointerCapture(e.pointerId);}catch(_){}
+    rect=c.getBoundingClientRect();
     const isHL=ED.tool==='hl', isEr=ED.tool==='erase';
     const bw= isEr?ERASE_WIDTHS[ED.sizeIdx] : isHL?HL_WIDTHS[ED.sizeIdx] : PEN_WIDTHS[ED.sizeIdx];
-    const w=bw*(c.width/c.getBoundingClientRect().width);
+    const w=bw*sx();
     ED.stroke={color:ED.color,w,erase:isEr,hl:isHL,pts:[pt(e)]};
-    ED.drawing=true; drawCurrent();
+    ED.drawing=true; ED.dctx=c.getContext('2d');
+    if(isHL){ drawCurrent(); }
+    else { const ctx=ED.dctx, p0=ED.stroke.pts[0]; ctx.globalCompositeOperation=isEr?'destination-out':'source-over';
+      ctx.fillStyle=ED.stroke.color; ctx.beginPath(); ctx.arc(p0.x,p0.y,w/2,0,7); ctx.fill(); ctx.globalCompositeOperation='source-over'; }
   });
   c.addEventListener('pointermove',e=>{ if(!ED.drawing||!ED.stroke)return; if(ED.penSeen&&e.pointerType==='touch')return; e.preventDefault();
     const evs=(e.getCoalescedEvents&&e.getCoalescedEvents().length)?e.getCoalescedEvents():[e];
-    for(const ev of evs) ED.stroke.pts.push(pt(ev));
-    drawCurrent(); });
+    if(ED.stroke.hl){ for(const ev of evs) ED.stroke.pts.push(pt(ev)); drawCurrent(); }
+    else { const ctx=ED.dctx, P=ED.stroke.pts; for(const ev of evs){ const np=pt(ev); seg(ctx,P[P.length-1],np,ED.stroke); P.push(np); } }
+  });
   const end=e=>{ if(!ED.drawing)return; ED.drawing=false;
     if(ED.stroke){ if(ED.base) drawStroke(ED.base.getContext('2d'),ED.stroke); ED.pages[ED.cur].strokes.push(ED.stroke); ED.stroke=null; } };
   c.addEventListener('pointerup',end); c.addEventListener('pointercancel',end);
