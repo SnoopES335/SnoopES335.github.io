@@ -1367,7 +1367,6 @@ function showEditorPage(i){
   stack.style.width=(pg.w*scale)+'px'; stack.style.height=(pg.h*scale)+'px';
   const bgC=document.createElement('canvas'); bgC.width=pg.w; bgC.height=pg.h; bgC.style.width='100%'; bgC.style.height='100%'; bgC.getContext('2d').drawImage(pg.bg,0,0);
   const drawC=document.createElement('canvas'); drawC.className='draw'; drawC.width=pg.w; drawC.height=pg.h; drawC.style.width='100%'; drawC.style.height='100%';
-  try{ drawC.getContext('2d',{desynchronized:true}); }catch(_){}  // latenzarmer Zeichen-Modus (falls unterstützt)
   stack.append(bgC,drawC); stage.append(stack); ED.drawC=drawC; ED.stackEl=stack;
   ED.base=document.createElement('canvas'); ED.base.width=pg.w; ED.base.height=pg.h;
   ED.zoom=1; ED.panX=0; ED.panY=0; applyZoom();
@@ -1390,6 +1389,9 @@ function drawStroke(ctx,s){
   ctx.globalCompositeOperation='source-over';
 }
 function bindDraw(c){
+  // Ein einziges, kapselungsfreies Eingabemodell: KEIN setPointerCapture (das war die
+  // Ursache dafür, dass beim erneuten Ansetzen des Stifts jeder zweite Strich verschluckt
+  // wurde). Zeichnen + Zwei-Finger-Zoom laufen komplett über Pointer-Events.
   let rect=null; const sx=()=>c.width/rect.width, sy=()=>c.height/rect.height;
   const pt=e=>({ x:(e.clientX-rect.left)*sx(), y:(e.clientY-rect.top)*sy(), p:(e.pressure&&e.pressure>0)?e.pressure:0.5 });
   function seg(ctx,a,b,s){ ctx.globalCompositeOperation=s.erase?'destination-out':'source-over';
@@ -1397,42 +1399,54 @@ function bindDraw(c){
     ctx.lineWidth=s.erase? s.w : s.w*(0.5+1.3*(b.p||0.5));
     ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
     ctx.globalCompositeOperation='source-over'; }
+  const touches=new Map(); let gz=null;
+  const arr=()=>[...touches.values()];
+  const gdist=()=>{ const a=arr(); return Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)||1; };
+  const gmid=()=>{ const a=arr(); return {x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2}; };
+  function cancelStroke(){ ED.drawing=false; ED.activeId=null; ED.stroke=null; drawCurrent(); }
+
   c.addEventListener('pointerdown',e=>{
     if(e.pointerType==='pen')ED.penSeen=true;
-    if(ED.penSeen&&e.pointerType==='touch')return;
-    e.preventDefault(); try{c.setPointerCapture(e.pointerId);}catch(_){}
+    if(e.pointerType==='touch'){
+      touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(touches.size>=2){ gz={d:gdist(),z:ED.zoom,m:gmid(),px:ED.panX,py:ED.panY}; if(ED.drawing)cancelStroke(); return; }
+      if(ED.penSeen)return;                 // Handballen/Finger zeichnen nie, sobald ein Stift benutzt wurde
+    }
+    if(ED.drawing)return;                    // während ein Strich läuft: weitere Zeiger ignorieren
+    e.preventDefault();
     rect=c.getBoundingClientRect();
     const isHL=ED.tool==='hl', isEr=ED.tool==='erase';
     const bw= isEr?ERASE_WIDTHS[ED.sizeIdx] : isHL?HL_WIDTHS[ED.sizeIdx] : PEN_WIDTHS[ED.sizeIdx];
     const w=bw*sx();
     ED.stroke={color:ED.color,w,erase:isEr,hl:isHL,pts:[pt(e)]};
-    ED.drawing=true; ED.dctx=c.getContext('2d');
+    ED.drawing=true; ED.activeId=e.pointerId; ED.dctx=c.getContext('2d');
     if(isHL){ drawCurrent(); }
     else { const ctx=ED.dctx, p0=ED.stroke.pts[0]; ctx.globalCompositeOperation=isEr?'destination-out':'source-over';
       ctx.fillStyle=ED.stroke.color; ctx.beginPath(); ctx.arc(p0.x,p0.y,w/2,0,7); ctx.fill(); ctx.globalCompositeOperation='source-over'; }
   });
-  c.addEventListener('pointermove',e=>{ if(!ED.drawing||!ED.stroke)return; if(ED.penSeen&&e.pointerType==='touch')return; e.preventDefault();
+  c.addEventListener('pointermove',e=>{
+    if(e.pointerType==='touch'&&touches.has(e.pointerId)){
+      touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(gz&&touches.size===2){ e.preventDefault(); const nd=gdist(), m=gmid();
+        ED.zoom=Math.min(4,Math.max(1, gz.z*nd/gz.d)); ED.panX=gz.px+(m.x-gz.m.x); ED.panY=gz.py+(m.y-gz.m.y); applyZoom(); return; }
+    }
+    if(!ED.drawing||!ED.stroke||e.pointerId!==ED.activeId)return;
+    e.preventDefault();
     const evs=(e.getCoalescedEvents&&e.getCoalescedEvents().length)?e.getCoalescedEvents():[e];
     if(ED.stroke.hl){ for(const ev of evs) ED.stroke.pts.push(pt(ev)); drawCurrent(); }
     else { const ctx=ED.dctx, P=ED.stroke.pts; for(const ev of evs){ const np=pt(ev); seg(ctx,P[P.length-1],np,ED.stroke); P.push(np); } }
   });
-  const end=e=>{ if(!ED.drawing)return; ED.drawing=false;
-    if(ED.stroke){ if(ED.base) drawStroke(ED.base.getContext('2d'),ED.stroke); ED.pages[ED.cur].strokes.push(ED.stroke); ED.stroke=null; } };
+  const end=e=>{
+    if(e.pointerType==='touch'){ touches.delete(e.pointerId);
+      if(touches.size<2){ gz=null; if(ED.zoom<=1.02){ ED.zoom=1;ED.panX=0;ED.panY=0;applyZoom(); } } }
+    if(!ED.drawing||e.pointerId!==ED.activeId)return;
+    ED.drawing=false; ED.activeId=null;
+    if(ED.stroke){ if(ED.base) drawStroke(ED.base.getContext('2d'),ED.stroke); ED.pages[ED.cur].strokes.push(ED.stroke); ED.stroke=null; }
+  };
   c.addEventListener('pointerup',end); c.addEventListener('pointercancel',end);
 }
 document.getElementById('eErase').onclick=()=>{ if(!ED)return; setTool(ED.tool==='erase'?'pen':'erase'); };
 document.getElementById('eHL').onclick=()=>{ if(!ED)return; setTool(ED.tool==='hl'?'pen':'hl'); };
-/* Zwei-Finger: Zoomen & Verschieben im Notiz-Editor (der Stift zeichnet weiter) */
-(function(){ const stage=document.getElementById('eStage'); if(!stage)return; let gz=null;
-  const dist=t=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
-  const mid=t=>({x:(t[0].clientX+t[1].clientX)/2,y:(t[0].clientY+t[1].clientY)/2});
-  stage.addEventListener('touchstart',e=>{ if(!ED)return; if(e.touches.length===2){ gz={d:dist(e.touches)||1,z:ED.zoom,m:mid(e.touches),px:ED.panX,py:ED.panY}; } },{passive:false});
-  stage.addEventListener('touchmove',e=>{ if(!ED||!gz||e.touches.length!==2)return; e.preventDefault();
-    const nd=dist(e.touches), m=mid(e.touches);
-    ED.zoom=Math.min(4,Math.max(1, gz.z*nd/gz.d)); ED.panX=gz.px+(m.x-gz.m.x); ED.panY=gz.py+(m.y-gz.m.y); applyZoom(); },{passive:false});
-  const gEnd=e=>{ if(e.touches.length<2){ gz=null; if(ED&&ED.zoom<=1.02){ ED.zoom=1;ED.panX=0;ED.panY=0;applyZoom(); } } };
-  stage.addEventListener('touchend',gEnd); stage.addEventListener('touchcancel',gEnd);
-})();
 document.getElementById('eUndo').onclick=()=>{ if(!ED)return; ED.pages[ED.cur].strokes.pop(); redrawStrokes(); };
 document.getElementById('eCancel').onclick=()=>{ document.getElementById('editor').classList.remove('open'); ED=null; };
 document.getElementById('eSave').onclick=async()=>{
