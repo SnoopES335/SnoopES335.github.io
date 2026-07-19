@@ -301,6 +301,7 @@
   </div>
   <div class="ecanvaswrap" id="eStage"></div>
 </div>
+<pre id="eDiag" style="display:none;position:fixed;top:54px;left:8px;z-index:99999;background:rgba(0,0,0,.74);color:#3f6;font:11px/1.3 ui-monospace,Menlo,monospace;padding:8px 10px;border-radius:8px;max-height:62vh;overflow:hidden;white-space:pre;pointer-events:none;max-width:66vw;margin:0"></pre>
 
 <div class="selbar" id="selbar">
   <div class="selbar-head"><span class="cnt" id="selCnt"></span><span class="link" id="selClear" style="margin-left:auto">Auswahl aufheben</span></div>
@@ -1330,6 +1331,15 @@ function setTool(t){ if(!ED)return; ED.tool=t;
   if(hl)hl.classList.toggle('on',t==='hl'); if(er)er.classList.toggle('on',t==='erase'); }
 function applyZoom(){ if(ED&&ED.stackEl) ED.stackEl.style.transform='translate('+ED.panX+'px,'+ED.panY+'px) scale('+ED.zoom+')'; }
 let ED=null;
+/* --- Diagnose-Overlay: zeigt live die echten Pointer-Ereignisse (Typ/ID/Zeit/Druck),
+   damit sich auf dem Gerät nachvollziehen lässt, was Safari beim Stift wirklich liefert.
+   An/aus per Tipp auf die Build-Kennung rechts in der Editor-Leiste. --- */
+let DIAG=false; const DIAGLOG=[];
+function diagToggle(){ DIAG=!DIAG; const o=document.getElementById('eDiag'); if(!o)return;
+  o.style.display=DIAG?'block':'none'; if(DIAG){ DIAGLOG.length=0; o.textContent='Diagnose an – bitte zeichnen…'; } }
+function diag(tag,e){ if(!DIAG)return; const o=document.getElementById('eDiag'); if(!o)return;
+  DIAGLOG.unshift(tag.padEnd(9)+' '+(e.pointerType||'?').slice(0,3)+' id='+e.pointerId+' t='+Math.round(e.timeStamp)+' P='+(e.pressure!=null?e.pressure.toFixed(2):'-'));
+  if(DIAGLOG.length>36)DIAGLOG.length=36; o.textContent=DIAGLOG.join('\n'); }
 async function openEditor(t){
   const stage=document.getElementById('eStage'); stage.innerHTML='<div style="color:#e6eef6;margin:auto">Lädt…</div>';
   document.getElementById('editor').classList.add('open');
@@ -1411,11 +1421,12 @@ function bindDraw(c){
   // ein neuer Aufsetzpunkt schreibt den vorigen Strich einfach sofort fest.
   function finalizeStroke(){
     if(ED.stroke){ if(ED.base) drawStroke(ED.base.getContext('2d'),ED.stroke); ED.pages[ED.cur].strokes.push(ED.stroke); ED.stroke=null; }
-    ED.drawing=false; ED.activeId=null;
+    ED.drawing=false; ED.activeId=null; ED.strokeStart=0;
   }
 
   c.addEventListener('pointerdown',e=>{
     if(e.pointerType==='pen')ED.penSeen=true;
+    diag('DOWN',e);
     if(e.pointerType==='touch'){
       touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
       if(touches.size>=2){ gz={d:gdist(),z:ED.zoom,m:gmid(),px:ED.panX,py:ED.panY}; if(ED.drawing)cancelStroke(); return; }
@@ -1424,6 +1435,7 @@ function bindDraw(c){
     if(ED.drawing)finalizeStroke();          // hängengebliebenen Vorstrich sofort sichern, dann neu beginnen
     e.preventDefault();
     rect=c.getBoundingClientRect();
+    ED.strokeStart=e.timeStamp;              // Zeitmarke dieses Strichs – gegen verspätete Events vorheriger Striche
     const isHL=ED.tool==='hl', isEr=ED.tool==='erase';
     const bw= isEr?ERASE_WIDTHS[ED.sizeIdx] : isHL?HL_WIDTHS[ED.sizeIdx] : PEN_WIDTHS[ED.sizeIdx];
     const w=bw*sx();
@@ -1440,6 +1452,7 @@ function bindDraw(c){
         ED.zoom=Math.min(4,Math.max(1, gz.z*nd/gz.d)); ED.panX=gz.px+(m.x-gz.m.x); ED.panY=gz.py+(m.y-gz.m.y); applyZoom(); return; }
     }
     if(!ED.drawing||!ED.stroke||e.pointerId!==ED.activeId)return;
+    if(e.timeStamp<ED.strokeStart)return;    // verspäteter Move eines früheren Strichs → ignorieren
     e.preventDefault();
     const evs=(e.getCoalescedEvents&&e.getCoalescedEvents().length)?e.getCoalescedEvents():[e];
     if(ED.stroke.hl){ for(const ev of evs) ED.stroke.pts.push(pt(ev)); drawCurrent(); }
@@ -1448,7 +1461,13 @@ function bindDraw(c){
   const end=e=>{
     if(e.pointerType==='touch'){ touches.delete(e.pointerId);
       if(touches.size<2){ gz=null; if(ED.zoom<=1.02){ ED.zoom=1;ED.panX=0;ED.panY=0;applyZoom(); } } }
+    // KERN-FIX: Apple Pencil verwendet für jeden Strich dieselbe pointerId. Ein verspätetes
+    // pointerup des VORIGEN Strichs würde sonst den laufenden neuen Strich vorzeitig beenden
+    // ("jeder zweite kurze Strich fehlt"). Zeitmarke entlarvt das veraltete Event.
+    const stale = ED.drawing && e.pointerId===ED.activeId && e.timeStamp<ED.strokeStart;
+    diag((e.type==='pointercancel'?'CANCEL':'UP')+(stale?'·alt':''),e);
     if(!ED.drawing||e.pointerId!==ED.activeId)return;
+    if(e.timeStamp<ED.strokeStart)return;    // veraltetes Ende eines vorherigen Strichs → NICHT beenden
     finalizeStroke();
   };
   c.addEventListener('pointerup',end); c.addEventListener('pointercancel',end);
@@ -1484,8 +1503,8 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-19 · Pencil-Fix 3';
-(function(){ const b=document.getElementById('eBuild'); if(b) b.textContent='Build '+APP_BUILD; })();
+const APP_BUILD='2026-07-19 · Pencil-Fix 4';
+(function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
    sobald eine neue Version aktiv wird, die Seite einmal automatisch neu laden. */
