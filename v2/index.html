@@ -26,6 +26,13 @@
     padding:5px 12px; font-size:13px; cursor:pointer; }
   .chip.on{ background:var(--ink); color:#fff; border-color:var(--ink); }
   .chip .dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+  .azbar{ display:flex; gap:3px; overflow-x:auto; padding:6px 0 2px; -webkit-overflow-scrolling:touch; }
+  .azb{ min-width:25px; text-align:center; border:1px solid var(--line); background:var(--card); border-radius:7px;
+    padding:4px 5px; font-size:12px; cursor:pointer; color:var(--muted); }
+  .azb.on{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .azb.dis{ opacity:.28; }
+  .vsub{ font-size:12px; color:#b9b9c0; font-weight:400; }
+  .vnav .pcbtn{ min-width:auto; padding:8px 12px; }
   .toolbar{ display:flex; gap:6px; margin-top:4px; }
   .toolbar button{ font-size:13px; padding:6px 10px; }
   main{ padding:12px 14px 40px; }
@@ -64,8 +71,10 @@
   .viewer{ position:fixed; inset:0; background:#111; display:none; flex-direction:column; z-index:30; }
   .viewer.on{ display:flex; }
   .vtop{ display:flex; align-items:center; gap:8px; padding:calc(env(safe-area-inset-top) + 8px) 12px 8px; color:#fff; }
-  .vtop .vt{ flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; }
+  .vtop .vt{ flex:1; min-width:0; font-weight:600; }
+  .vtop .vt>div{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .vtop button{ background:#2a2a2e; color:#fff; border-color:#3a3a3e; }
+  .vnav button:disabled{ opacity:.35; }
   .vstage{ flex:1; overflow:auto; display:flex; align-items:center; justify-content:center; }
   #pdfcanvas{ max-width:100%; box-shadow:0 2px 16px rgba(0,0,0,.5); background:#fff; }
   .vnav{ display:flex; align-items:center; justify-content:center; gap:16px; color:#fff; padding:8px 12px calc(env(safe-area-inset-bottom) + 8px); }
@@ -86,12 +95,12 @@
     <button class="primary" id="importBtn">＋ Importieren</button>
   </div>
   <div class="row" style="margin-top:8px"><input id="search" type="search" placeholder="Suche nach Titel, Komponist, Buch …" autocomplete="off"></div>
+  <div class="azbar" id="azbar"></div>
   <div class="chips" id="filterChips"></div>
   <div class="toolbar">
     <button id="manageTags">🏷 Tags</button>
     <button id="manageSetlists">🎵 Setlists</button>
     <button id="dataMenuBtn">⤓ Daten</button>
-    <button id="folderBtn" hidden>🗂 Mac-Ordner</button>
   </div>
   <input id="fileInput" type="file" accept="application/pdf,.pdf" multiple hidden>
 </header>
@@ -194,26 +203,17 @@
 <input id="settingsImport" type="file" accept="application/json,.json" hidden>
 <input id="pkgImport" type="file" accept=".zip,application/zip,.realbookpkg" hidden>
 
-<!-- Mac-Ordner -->
-<div class="overlay" id="folderOverlay">
-  <div class="modal">
-    <h2>Mac-Ordner</h2>
-    <div class="sub" id="folderState">Kein Ordner verbunden.</div>
-    <div style="margin-top:10px">
-      <button class="sheetbtn" data-f="connect">🗂 Ordner verbinden / wechseln</button>
-      <button class="sheetbtn" data-f="import">📥 Aus Ordner importieren</button>
-      <button class="sheetbtn" data-f="write">💾 Bibliothek in Ordner schreiben</button>
-    </div>
-    <div class="sub" style="margin-top:12px">Diese Funktion nutzt einen echten Ordner deiner Festplatte. Sie ist in Chrome und Edge am Mac verfügbar. In Safari und auf dem iPad wird der interne Speicher genutzt.</div>
-    <div class="row"><button class="ghost" id="folderClose">Schließen</button></div>
-  </div>
-</div>
-
 <!-- Viewer -->
 <div class="viewer" id="viewer">
-  <div class="vtop"><div class="vt" id="vTitle"></div><button id="vClose">✕ Schließen</button></div>
+  <div class="vtop"><div class="vt"><div id="vTitle"></div><div class="vsub" id="vSub"></div></div><button id="vClose">✕</button></div>
   <div class="vstage" id="vStage"><canvas id="pdfcanvas"></canvas></div>
-  <div class="vnav"><button id="vPrev">‹ Zurück</button><span id="vPage">1 / 1</span><button id="vNext">Weiter ›</button></div>
+  <div class="vnav">
+    <button id="vPrevPiece" class="pcbtn" title="Vorheriges Stück">⟨ Stück</button>
+    <button id="vPrev">‹</button>
+    <span id="vPage">1 / 1</span>
+    <button id="vNext">›</button>
+    <button id="vNextPiece" class="pcbtn" title="Nächstes Stück">Stück ⟩</button>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -258,7 +258,8 @@ async function getSetting(k,def){ const r=await reqP(tx("settings","readonly").o
 async function putSetting(k,v){ return reqP(tx("settings","readwrite").objectStore("settings").put({key:k,value:v})); }
 
 /* ---------- Zustand ---------- */
-let PIECES=[], TAGS=[], SETLISTS=[], FILTER="", VIEW={mode:"all"};
+let PIECES=[], TAGS=[], SETLISTS=[], FILTER="", VIEW={mode:"all"}, LETTER=null;
+function firstLetter(t){ const m=(t||"").toUpperCase().replace(/^\s*(THE|A|AN|DER|DIE|DAS)\s+/,"").match(/[A-Z0-9]/); return m? (/[0-9]/.test(m[0])?"#":m[0]) : "#"; }
 const $=s=>document.querySelector(s);
 function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("on"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("on"),1700); }
 function fmtSize(b){ if(b>=1e6)return (b/1e6).toFixed(1)+" MB"; if(b>=1e3)return Math.round(b/1e3)+" KB"; return (b||0)+" B"; }
@@ -279,20 +280,36 @@ function renderChips(){
     b.innerHTML=(dot?`<span class="dot" style="background:${dot}"></span>`:"")+label; b.onclick=on; c.appendChild(b); };
   mk("Alle", VIEW.mode==="all", ()=>{ VIEW={mode:"all"}; renderChips(); render(); });
   mk("★ Favoriten", VIEW.mode==="fav", ()=>{ VIEW={mode:"fav"}; renderChips(); render(); });
+  const BOOKS=[...new Set(PIECES.map(p=>p.book).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  for(const bk of BOOKS) mk("📖 "+bk, VIEW.mode==="book"&&VIEW.id===bk, ()=>{ VIEW={mode:"book",id:bk}; renderChips(); render(); });
   for(const t of TAGS) mk(t.name, VIEW.mode==="tag"&&VIEW.id===t.id, ()=>{ VIEW={mode:"tag",id:t.id}; renderChips(); render(); }, t.color);
   for(const s of SETLISTS) mk("🎵 "+s.name, VIEW.mode==="setlist"&&VIEW.id===s.id, ()=>{ VIEW={mode:"setlist",id:s.id}; renderChips(); render(); });
 }
+function renderAZ(avail){
+  const bar=$("#azbar"); bar.innerHTML="";
+  const all=document.createElement("button"); all.className="azb"+(LETTER===null?" on":""); all.textContent="Alle";
+  all.onclick=()=>{ LETTER=null; render(); }; bar.appendChild(all);
+  for(const L of ["#",...("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""))]){
+    const has=avail.has(L); const b=document.createElement("button");
+    b.className="azb"+(LETTER===L?" on":"")+(has?"":" dis"); b.textContent=L;
+    b.onclick=()=>{ if(!has&&LETTER!==L)return; LETTER=(LETTER===L?null:L); render(); }; bar.appendChild(b);
+  }
+}
 function inView(p){
   if(VIEW.mode==="fav") return !!p.fav;
+  if(VIEW.mode==="book") return p.book===VIEW.id;
   if(VIEW.mode==="tag") return (p.tags||[]).includes(VIEW.id);
   if(VIEW.mode==="setlist"){ const s=SETLISTS.find(x=>x.id===VIEW.id); return s? s.items.includes(p.id):false; }
   return true;
 }
 function render(){
   const q=FILTER.trim().toLowerCase();
-  let items=PIECES.filter(inView);
+  let base=PIECES.filter(inView);
+  renderAZ(new Set(base.map(p=>firstLetter(p.title))));
+  let items=base;
+  if(LETTER) items=items.filter(p=>firstLetter(p.title)===LETTER);
   if(q) items=items.filter(p=>(p.title+" "+p.composer+" "+p.book).toLowerCase().includes(q));
-  $("#count").textContent=PIECES.length+" Stücke"+(VIEW.mode!=="all"||q? " · "+items.length+" angezeigt":"");
+  $("#count").textContent=PIECES.length+" Stücke"+((VIEW.mode!=="all"||q||LETTER)? " · "+items.length+" angezeigt":"");
   $("#empty").style.display=PIECES.length?"none":"block";
   const ul=document.createElement("ul");
   for(const p of items){
@@ -431,6 +448,7 @@ $("#settingsImport").onchange=async e=>{ const f=e.target.files[0]; e.target.val
 
 /* ---------- Sammlungspaket (Baustein 3): Stücke + Noten in einer Datei ---------- */
 function visiblePieces(){ const q=FILTER.trim().toLowerCase(); let it=PIECES.filter(inView);
+  if(LETTER) it=it.filter(p=>firstLetter(p.title)===LETTER);
   if(q) it=it.filter(p=>(p.title+" "+p.composer+" "+p.book).toLowerCase().includes(q)); return it; }
 function viewName(){ if(VIEW.mode==="setlist"){ const s=SETLISTS.find(x=>x.id===VIEW.id); return "setlist-"+(s?s.name:"").replace(/[^\w]+/g,"-"); }
   if(VIEW.mode==="tag"){ const t=tagById(VIEW.id); return "tag-"+(t?t.name:"").replace(/[^\w]+/g,"-"); }
@@ -518,61 +536,18 @@ async function mergeSettings(obj){
   }
 }
 
-/* ---------- Mac-Ordner (Baustein 4): echter Ordner via File System Access API ---------- */
-let folderHandle=null;
-function fileSafe(s){ return (s||"stueck").replace(/[\/\\:*?"<>|]+/g,"-").replace(/\s+/g," ").trim().slice(0,80)||"stueck"; }
-async function ensurePerm(h){ if(!h)return false;
-  try{ if(await h.queryPermission({mode:"readwrite"})==="granted") return true;
-       if(await h.requestPermission({mode:"readwrite"})==="granted") return true; }catch(_){}
-  return false; }
-async function readSidecar(h){ try{ const fh=await h.getFileHandle("realbook-index.json"); const f=await fh.getFile(); const o=JSON.parse(await f.text()); return o.pieces||{}; }catch(_){ return {}; } }
-async function writeSidecar(h,pieces){ const fh=await h.getFileHandle("realbook-index.json",{create:true}); const w=await fh.createWritable(); await w.write(JSON.stringify({app:"realbook",kind:"folder-index",schema:1,pieces},null,1)); await w.close(); }
-async function ensureTags(names){ let changed=false; for(const tn of (names||[])){ if(tn&&!TAGS.find(t=>t.name.toLowerCase()===tn.toLowerCase())){ TAGS.push({id:uid("t_"),name:tn,color:PALETTE[TAGS.length%PALETTE.length]}); changed=true; } } if(changed) await putSetting("tags",TAGS); }
-async function addPieceBlob(blob, meta){
-  const id=uid(), blobId="b_"+id;
-  const tagIds=(meta.tags||[]).map(tn=>{ const t=TAGS.find(x=>x.name.toLowerCase()===tn.toLowerCase()); return t?t.id:null; }).filter(Boolean);
-  const piece={ id, title:meta.title||"Ohne Titel", composer:meta.composer||"", book:meta.book||"Import", source:meta.source||"",
-    createdAt:Date.now(), fav:!!meta.fav, tags:tagIds, files:[{role:"score",blobId,name:(meta.title||"stueck")+".pdf",size:blob.size}] };
-  const t=tx(["pieces","blobs"],"readwrite");
-  await Promise.all([ reqP(t.objectStore("blobs").put({id:blobId,blob})), reqP(t.objectStore("pieces").put(piece)) ]);
-  return piece;
-}
-function updateFolderState(){ $("#folderState").textContent = folderHandle ? ("Verbunden: " + (folderHandle.name||"Ordner")) : "Kein Ordner verbunden."; }
-async function pickFolder(){ try{ const h=await window.showDirectoryPicker({mode:"readwrite"}); folderHandle=h; try{ await putSetting("folderHandle",h); }catch(_){}
-    updateFolderState(); toast("Ordner verbunden: "+(h.name||"")); }catch(_){ /* Nutzer hat abgebrochen */ } }
-async function importFromFolder(){ if(!folderHandle||!(await ensurePerm(folderHandle))) return toast("Kein Zugriff auf den Ordner");
-  toast("Lese Ordner …"); const side=await readSidecar(folderHandle);
-  const existing=new Set(PIECES.map(refKey)); let added=0, skipped=0;
-  for await (const entry of folderHandle.values()){
-    if(entry.kind!=="file"||!/\.pdf$/i.test(entry.name)) continue;
-    const meta=side[entry.name]||{};
-    const title=meta.title||entry.name.replace(/\.pdf$/i,"").replace(/_/g," ").trim();
-    const book=meta.book||"Ordner";
-    const key=title.toLowerCase().trim()+"|"+book.toLowerCase().trim();
-    if(existing.has(key)){ skipped++; continue; }
-    await ensureTags(meta.tags);
-    const file=await entry.getFile();
-    await addPieceBlob(file, {title,composer:meta.composer||"",book,source:meta.source||"",tags:meta.tags||[],fav:!!meta.fav});
-    existing.add(key); added++; if(added%25===0) toast("Importiere … "+added);
-  }
-  await refresh(); toast(added+" importiert"+(skipped?", "+skipped+" schon vorhanden":"")); }
-async function writeToFolder(){ if(!folderHandle||!(await ensurePerm(folderHandle))) return toast("Kein Zugriff auf den Ordner");
-  toast("Schreibe in Ordner …"); const side={}; const used={};
-  for(const p of PIECES){ let base=fileSafe(p.title), name=base+".pdf", i=2; while(used[name]){ name=base+" ("+i+").pdf"; i++; } used[name]=1;
-    const blob=await getBlob(p.files[0].blobId); const fh=await folderHandle.getFileHandle(name,{create:true}); const w=await fh.createWritable(); await w.write(blob); await w.close();
-    side[name]={ title:p.title, composer:p.composer, book:p.book, tags:(p.tags||[]).map(id=>{const t=tagById(id);return t?t.name:null;}).filter(Boolean), fav:!!p.fav }; }
-  await writeSidecar(folderHandle, side); toast(PIECES.length+" Dateien in den Ordner geschrieben"); }
-$("#folderBtn").onclick=()=>{ updateFolderState(); $("#folderOverlay").classList.add("on"); };
-$("#folderClose").onclick=()=>$("#folderOverlay").classList.remove("on");
-document.querySelectorAll("#folderOverlay [data-f]").forEach(b=> b.onclick=async ()=>{ const f=b.dataset.f;
-  if(f==="connect"){ await pickFolder(); }
-  else if(f==="import"){ $("#folderOverlay").classList.remove("on"); await importFromFolder(); }
-  else if(f==="write"){ $("#folderOverlay").classList.remove("on"); await writeToFolder(); } });
-
-/* ---------- Betrachter ---------- */
-let vDoc=null,vPage=1,vNum=1,vRendering=false;
-async function openViewer(p){ const blob=await getBlob(p.files[0].blobId); const buf=await blob.arrayBuffer();
-  vDoc=await pdfjsLib.getDocument({data:buf}).promise; vNum=vDoc.numPages; vPage=1; $("#vTitle").textContent=p.title; $("#viewer").classList.add("on"); await renderPage(); }
+/* ---------- Betrachter (mit kontextsensitivem Blättern) ---------- */
+let vDoc=null,vPage=1,vNum=1,vRendering=false, NAV={list:[],idx:0};
+async function openViewer(p){ const list=visiblePieces(); let idx=list.findIndex(x=>x.id===p.id);
+  if(idx<0){ list.unshift(p); idx=0; } NAV={list,idx}; $("#viewer").classList.add("on"); await openAt(idx); }
+async function openAt(idx){ if(idx<0||idx>=NAV.list.length)return; NAV.idx=idx; const p=NAV.list[idx];
+  const blob=await getBlob(p.files[0].blobId); const buf=await blob.arrayBuffer();
+  vDoc=await pdfjsLib.getDocument({data:buf}).promise; vNum=vDoc.numPages; vPage=1;
+  $("#vTitle").textContent=p.title;
+  $("#vSub").textContent=[p.composer,p.book].filter(Boolean).join(" · ")+"   ·   "+(idx+1)+" / "+NAV.list.length;
+  $("#vPrevPiece").disabled=(idx<=0); $("#vNextPiece").disabled=(idx>=NAV.list.length-1);
+  await renderPage(); }
+async function gotoPiece(d){ const n=NAV.idx+d; if(n>=0&&n<NAV.list.length) await openAt(n); }
 async function renderPage(){ if(!vDoc||vRendering)return; vRendering=true;
   const page=await vDoc.getPage(vPage); const stage=$("#vStage"); const avail=stage.clientHeight-8;
   const base=page.getViewport({scale:1}); const scale=Math.max(0.2,avail/base.height); const vp=page.getViewport({scale});
@@ -582,10 +557,14 @@ async function renderPage(){ if(!vDoc||vRendering)return; vRendering=true;
   ctx.setTransform(dpr,0,0,dpr,0,0); await page.render({canvasContext:ctx,viewport:vp}).promise;
   $("#vPage").textContent=vPage+" / "+vNum; vRendering=false; }
 $("#vClose").onclick=()=>{ $("#viewer").classList.remove("on"); vDoc=null; };
-$("#vPrev").onclick=async()=>{ if(vPage>1){ vPage--; await renderPage(); } };
-$("#vNext").onclick=async()=>{ if(vPage<vNum){ vPage++; await renderPage(); } };
+$("#vPrev").onclick=async()=>{ if(vPage>1){ vPage--; await renderPage(); } else { await gotoPiece(-1); } };
+$("#vNext").onclick=async()=>{ if(vPage<vNum){ vPage++; await renderPage(); } else { await gotoPiece(1); } };
+$("#vPrevPiece").onclick=()=>gotoPiece(-1);
+$("#vNextPiece").onclick=()=>gotoPiece(1);
 window.addEventListener("keydown",e=>{ if(!$("#viewer").classList.contains("on"))return;
-  if(e.key==="ArrowLeft")$("#vPrev").click(); else if(e.key==="ArrowRight")$("#vNext").click(); else if(e.key==="Escape")$("#vClose").click(); });
+  if(e.key==="ArrowLeft")$("#vPrev").click(); else if(e.key==="ArrowRight")$("#vNext").click();
+  else if(e.key==="ArrowUp"){ e.preventDefault(); gotoPiece(-1); } else if(e.key==="ArrowDown"){ e.preventDefault(); gotoPiece(1); }
+  else if(e.key==="Escape")$("#vClose").click(); });
 let tx0=null;
 $("#vStage").addEventListener("touchstart",e=>{ tx0=e.touches[0].clientX; },{passive:true});
 $("#vStage").addEventListener("touchend",e=>{ if(tx0==null)return; const dx=e.changedTouches[0].clientX-tx0; tx0=null; if(Math.abs(dx)>50){ if(dx<0)$("#vNext").click(); else $("#vPrev").click(); } },{passive:true});
@@ -594,10 +573,7 @@ let _rz; window.addEventListener("resize",()=>{ clearTimeout(_rz); _rz=setTimeou
 /* Suche */
 $("#search").addEventListener("input",e=>{ FILTER=e.target.value; render(); });
 if(navigator.storage&&navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
-if("showDirectoryPicker" in window){ $("#folderBtn").hidden=false; }
-openDB().then(async()=>{ await refresh();
-  try{ const h=await getSetting("folderHandle"); if(h){ folderHandle=h; updateFolderState(); } }catch(_){}
-}).catch(err=>{ console.error(err); $("#empty").innerHTML="<p>Speicher konnte nicht geöffnet werden.</p>"; });
+openDB().then(refresh).catch(err=>{ console.error(err); $("#empty").innerHTML="<p>Speicher konnte nicht geöffnet werden.</p>"; });
 window.__ready=true;
 </script>
 </body>
