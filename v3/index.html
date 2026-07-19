@@ -337,6 +337,13 @@ const S = {
   booksOpen: localStorage.getItem('rb_booksopen')==='1',
   azOpen: localStorage.getItem('rb_azopen')==='1',
 };
+/* Standard-Buchauswahl: beim Öffnen der App wird diese Auswahl vorausgewählt. */
+const DEFAULT_BOOKS = JSON.parse(localStorage.getItem('rb_defaultbooks')||'[]');
+S.books = new Set(DEFAULT_BOOKS);
+function setDefaultBooks(){ const arr=[...S.books]; localStorage.setItem('rb_defaultbooks', JSON.stringify(arr));
+  DEFAULT_BOOKS.length=0; DEFAULT_BOOKS.push(...arr); render(); }
+function clearDefaultBooks(){ localStorage.removeItem('rb_defaultbooks'); DEFAULT_BOOKS.length=0; render(); }
+function booksAreDefault(){ if(DEFAULT_BOOKS.length!==S.books.size) return false; return DEFAULT_BOOKS.every(b=>S.books.has(b)); }
 /* Metadaten-Korrektur der Großsammlung: Overrides je Stück (Titel/Komponist), PDFs bleiben unberührt.
    Schlüssel = ursprüngliche Identität (bid|Originaltitel|Seite), damit er auch nach Umbenennen stabil bleibt. */
 const OVERRIDES = JSON.parse(localStorage.getItem('rb_overrides')||'{}');
@@ -524,6 +531,23 @@ function renderBooks(){
     });
     bar.append(grp);
   }
+  // Standard-Auswahl setzen/löschen
+  const foot=document.createElement('div'); foot.className='bookgroup'; foot.style.marginTop='2px';
+  const line=document.createElement('div'); line.className='chiprow'; line.style.cssText='gap:10px;align-items:center;flex-wrap:wrap';
+  const isDef=booksAreDefault() && (DEFAULT_BOOKS.length>0 || S.books.size>0);
+  const setBtn=document.createElement('button'); setBtn.id='bookDefaultBtn'; setBtn.className='btn ghost'; setBtn.style.cssText='padding:6px 12px';
+  setBtn.textContent = isDef ? '✓ Ist der Standard' : '★ Auswahl als Standard';
+  setBtn.disabled = isDef; if(isDef) setBtn.style.opacity='.6';
+  setBtn.onclick=()=>setDefaultBooks();
+  line.append(setBtn);
+  if(DEFAULT_BOOKS.length){ const clr=document.createElement('span'); clr.className='link'; clr.textContent='Standard löschen'; clr.onclick=()=>clearDefaultBooks(); line.append(clr); }
+  foot.append(line);
+  const note=document.createElement('div'); note.className='muted'; note.style.marginTop='6px';
+  note.textContent = DEFAULT_BOOKS.length
+    ? 'Beim Öffnen wird diese Buch-Auswahl ('+DEFAULT_BOOKS.length+' '+(DEFAULT_BOOKS.length>1?'Bücher':'Buch')+') vorausgewählt.'
+    : 'Kein Standard gesetzt – beim Öffnen sind alle Bücher aktiv.';
+  foot.append(note);
+  bar.append(foot);
 }
 
 /* ---------- list ---------- */
@@ -711,7 +735,7 @@ function render(){
 
 /* ---------- Home ---------- */
 function goHome(){
-  S.view='all';S.q='';S.initial='';S.books=new Set();S.comp='';S.tagFilter=new Set();S.openSet=null;
+  S.view='all';S.q='';S.initial='';S.books=new Set(DEFAULT_BOOKS);S.comp='';S.tagFilter=new Set();S.openSet=null;
   document.getElementById('q').value='';
   closeSheet();document.getElementById('vClose').click();window.scrollTo(0,0);render();
 }
@@ -1838,7 +1862,7 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-19 · Meta überall';
+const APP_BUILD='2026-07-19 · Buch-Standard';
 (function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
