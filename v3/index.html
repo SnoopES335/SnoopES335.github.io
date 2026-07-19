@@ -1481,6 +1481,13 @@ document.getElementById('eHL').onclick=()=>{ if(!ED)return; setTool(ED.tool==='h
 (function(){ const ed=document.getElementById('editor'); if(!ed)return;
   const stop=e=>{ const t=e.target; if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'))return; e.preventDefault(); };
   ['selectstart','contextmenu','gesturestart','gesturechange'].forEach(n=>ed.addEventListener(n,stop,{passive:false}));
+  /* DER eigentliche Hammer: die Auswahl-/Callout-Geste entsteht aus dem Touch-Strom.
+     Nur auf der ZEICHENFLÄCHE (nicht auf den Knöpfen!) die Touch-Standardaktion
+     unterbinden – dann kann iOS gar keine Auswahl/Callout beginnen. Die Pointer-
+     Ereignisse fürs Zeichnen und den Zwei-Finger-Zoom laufen davon unbeeinflusst weiter. */
+  const stage=document.getElementById('eStage');
+  if(stage){ ['touchstart','touchmove','touchend','touchcancel'].forEach(n=>
+    stage.addEventListener(n,e=>{ e.preventDefault(); },{passive:false})); }
 })();
 document.getElementById('eUndo').onclick=()=>{ if(!ED)return; ED.pages[ED.cur].strokes.pop(); redrawStrokes(); };
 document.getElementById('eCancel').onclick=()=>{ document.getElementById('editor').classList.remove('open'); ED=null; };
@@ -1511,7 +1518,7 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-19 · Pencil-Fix 5';
+const APP_BUILD='2026-07-19 · Pencil-Fix 6';
 (function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
