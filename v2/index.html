@@ -76,7 +76,10 @@
   .vtop button{ background:#2a2a2e; color:#fff; border-color:#3a3a3e; }
   .vnav button:disabled{ opacity:.35; }
   .vstage{ flex:1; overflow:auto; display:flex; align-items:center; justify-content:center; }
-  #pdfcanvas{ max-width:100%; box-shadow:0 2px 16px rgba(0,0,0,.5); background:#fff; }
+  #pdfcanvas{ display:block; max-width:100%; box-shadow:0 2px 16px rgba(0,0,0,.5); background:#fff; }
+  .vpwrap{ position:relative; display:inline-block; line-height:0; }
+  #inkcanvas{ position:absolute; left:0; top:0; touch-action:none; pointer-events:none; }
+  .vtop .tgl.on{ background:var(--accent); border-color:var(--accent); }
   .vnav{ display:flex; align-items:center; justify-content:center; gap:16px; color:#fff; padding:8px 12px calc(env(safe-area-inset-bottom) + 8px); }
   .vnav button{ background:#2a2a2e; color:#fff; border-color:#3a3a3e; min-width:64px; }
   .toast{ position:fixed; left:50%; bottom:80px; transform:translateX(-50%); background:#111; color:#fff;
@@ -205,8 +208,12 @@
 
 <!-- Viewer -->
 <div class="viewer" id="viewer">
-  <div class="vtop"><div class="vt"><div id="vTitle"></div><div class="vsub" id="vSub"></div></div><button id="vClose">✕</button></div>
-  <div class="vstage" id="vStage"><canvas id="pdfcanvas"></canvas></div>
+  <div class="vtop"><div class="vt"><div id="vTitle"></div><div class="vsub" id="vSub"></div></div>
+    <button id="vDraw" class="tgl" title="Notiz-Modus (Apple Pencil)">✏️</button>
+    <button id="vUndo" hidden title="Rückgängig">↶</button>
+    <button id="vClear" hidden title="Seite leeren">🗑</button>
+    <button id="vClose">✕</button></div>
+  <div class="vstage" id="vStage"><div class="vpwrap" id="vpwrap"><canvas id="pdfcanvas"></canvas><canvas id="inkcanvas"></canvas></div></div>
   <div class="vnav">
     <button id="vPrevPiece" class="pcbtn" title="Vorheriges Stück">⟨ Stück</button>
     <button id="vPrev">‹</button>
@@ -536,13 +543,15 @@ async function mergeSettings(obj){
   }
 }
 
-/* ---------- Betrachter (mit kontextsensitivem Blättern) ---------- */
+/* ---------- Betrachter (kontextsensitives Blättern + Notiz-Ebene) ---------- */
 let vDoc=null,vPage=1,vNum=1,vRendering=false, NAV={list:[],idx:0};
+let notesData=null, notesPieceId=null, drawMode=false, INK_COLOR="#0a58ff", INK_BASE=2.4;
 async function openViewer(p){ const list=visiblePieces(); let idx=list.findIndex(x=>x.id===p.id);
   if(idx<0){ list.unshift(p); idx=0; } NAV={list,idx}; $("#viewer").classList.add("on"); await openAt(idx); }
 async function openAt(idx){ if(idx<0||idx>=NAV.list.length)return; NAV.idx=idx; const p=NAV.list[idx];
   const blob=await getBlob(p.files[0].blobId); const buf=await blob.arrayBuffer();
   vDoc=await pdfjsLib.getDocument({data:buf}).promise; vNum=vDoc.numPages; vPage=1;
+  notesPieceId=p.id; notesData=await getSetting("notes:"+p.id,{pages:{}}); setDraw(false);
   $("#vTitle").textContent=p.title;
   $("#vSub").textContent=[p.composer,p.book].filter(Boolean).join(" · ")+"   ·   "+(idx+1)+" / "+NAV.list.length;
   $("#vPrevPiece").disabled=(idx<=0); $("#vNextPiece").disabled=(idx>=NAV.list.length-1);
@@ -555,8 +564,9 @@ async function renderPage(){ if(!vDoc||vRendering)return; vRendering=true;
   canvas.width=Math.floor(vp.width*dpr); canvas.height=Math.floor(vp.height*dpr);
   canvas.style.width=Math.floor(vp.width)+"px"; canvas.style.height=Math.floor(vp.height)+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0); await page.render({canvasContext:ctx,viewport:vp}).promise;
+  sizeInk(); renderInk();
   $("#vPage").textContent=vPage+" / "+vNum; vRendering=false; }
-$("#vClose").onclick=()=>{ $("#viewer").classList.remove("on"); vDoc=null; };
+$("#vClose").onclick=()=>{ setDraw(false); $("#viewer").classList.remove("on"); vDoc=null; };
 $("#vPrev").onclick=async()=>{ if(vPage>1){ vPage--; await renderPage(); } else { await gotoPiece(-1); } };
 $("#vNext").onclick=async()=>{ if(vPage<vNum){ vPage++; await renderPage(); } else { await gotoPiece(1); } };
 $("#vPrevPiece").onclick=()=>gotoPiece(-1);
@@ -565,10 +575,41 @@ window.addEventListener("keydown",e=>{ if(!$("#viewer").classList.contains("on")
   if(e.key==="ArrowLeft")$("#vPrev").click(); else if(e.key==="ArrowRight")$("#vNext").click();
   else if(e.key==="ArrowUp"){ e.preventDefault(); gotoPiece(-1); } else if(e.key==="ArrowDown"){ e.preventDefault(); gotoPiece(1); }
   else if(e.key==="Escape")$("#vClose").click(); });
-let tx0=null;
-$("#vStage").addEventListener("touchstart",e=>{ tx0=e.touches[0].clientX; },{passive:true});
-$("#vStage").addEventListener("touchend",e=>{ if(tx0==null)return; const dx=e.changedTouches[0].clientX-tx0; tx0=null; if(Math.abs(dx)>50){ if(dx<0)$("#vNext").click(); else $("#vPrev").click(); } },{passive:true});
+/* Wischen zum Blättern — nur mit dem Finger (Stift zeichnet) */
+let sx=null;
+$("#vStage").addEventListener("pointerdown",e=>{ if(e.pointerType==="touch") sx=e.clientX; });
+$("#vStage").addEventListener("pointerup",e=>{ if(e.pointerType!=="touch"||sx==null)return; const dx=e.clientX-sx; sx=null; if(Math.abs(dx)>50){ if(dx<0)$("#vNext").click(); else $("#vPrev").click(); } });
 let _rz; window.addEventListener("resize",()=>{ clearTimeout(_rz); _rz=setTimeout(()=>{ if(vDoc)renderPage(); },200); });
+
+/* ---------- Notiz-Ebene (Apple Pencil / Stift; Handballen wird ignoriert) ---------- */
+function setDraw(on){ drawMode=on; const ic=$("#inkcanvas"); ic.style.pointerEvents=on?"auto":"none";
+  $("#vDraw").classList.toggle("on",on); $("#vUndo").hidden=!on; $("#vClear").hidden=!on; }
+$("#vDraw").onclick=()=>setDraw(!drawMode);
+function sizeInk(){ const pc=$("#pdfcanvas"), ic=$("#inkcanvas"); ic.width=pc.width; ic.height=pc.height; ic.style.width=pc.style.width; ic.style.height=pc.style.height; }
+function inkCtx(){ const ic=$("#inkcanvas"), ctx=ic.getContext("2d"); const dpr=Math.min(window.devicePixelRatio||1,2); ctx.setTransform(dpr,0,0,dpr,0,0); return ctx; }
+function drawStroke(ctx,s,W,H){ const pts=s.pts; ctx.strokeStyle=s.c; ctx.lineCap="round"; ctx.lineJoin="round";
+  if(pts.length===1){ ctx.fillStyle=s.c; ctx.beginPath(); ctx.arc(pts[0][0]*W,pts[0][1]*H,(s.w*(0.5+1.3*(pts[0][2]||0.5)))/2,0,7); ctx.fill(); return; }
+  for(let i=1;i<pts.length;i++){ const a=pts[i-1],b=pts[i]; ctx.lineWidth=s.w*(0.5+1.3*(((a[2]||0.5)+(b[2]||0.5))/2));
+    ctx.beginPath(); ctx.moveTo(a[0]*W,a[1]*H); ctx.lineTo(b[0]*W,b[1]*H); ctx.stroke(); } }
+function pageStrokes(){ if(!notesData) return []; const k=String(vPage-1); if(!notesData.pages[k]) notesData.pages[k]=[]; return notesData.pages[k]; }
+function renderInk(){ const ic=$("#inkcanvas"); const ctx=inkCtx(); const W=parseFloat(ic.style.width)||ic.clientWidth, H=parseFloat(ic.style.height)||ic.clientHeight;
+  ctx.clearRect(0,0,W,H); for(const s of pageStrokes()) drawStroke(ctx,s,W,H); }
+let curStroke=null, drawing=false, _dctx=null, _dW=0, _dH=0;
+function ptFrom(e){ const ic=$("#inkcanvas"); const r=ic.getBoundingClientRect(); return [ (e.clientX-r.left)/r.width, (e.clientY-r.top)/r.height, (e.pressure||0.5) ]; }
+$("#inkcanvas").addEventListener("pointerdown",e=>{ if(!drawMode||e.pointerType!=="pen")return; e.preventDefault(); e.stopPropagation();
+  try{ e.target.setPointerCapture(e.pointerId); }catch(_){}
+  const ic=$("#inkcanvas"); _dW=parseFloat(ic.style.width)||ic.clientWidth; _dH=parseFloat(ic.style.height)||ic.clientHeight; _dctx=inkCtx();
+  curStroke={c:INK_COLOR,w:INK_BASE,pts:[ptFrom(e)]}; drawing=true; });
+$("#inkcanvas").addEventListener("pointermove",e=>{ if(!drawing||e.pointerType!=="pen")return; e.preventDefault(); e.stopPropagation();
+  const evs=(e.getCoalescedEvents&&e.getCoalescedEvents().length)?e.getCoalescedEvents():[e];
+  for(const ev of evs){ const p=ptFrom(ev); const a=curStroke.pts[curStroke.pts.length-1]; curStroke.pts.push(p);
+    _dctx.strokeStyle=curStroke.c; _dctx.lineCap="round"; _dctx.lineJoin="round"; _dctx.lineWidth=curStroke.w*(0.5+1.3*(((a[2]||0.5)+(p[2]||0.5))/2));
+    _dctx.beginPath(); _dctx.moveTo(a[0]*_dW,a[1]*_dH); _dctx.lineTo(p[0]*_dW,p[1]*_dH); _dctx.stroke(); } });
+function endStroke(e){ if(!drawing)return; if(e){ e.preventDefault(); e.stopPropagation(); } drawing=false; if(curStroke&&curStroke.pts.length){ pageStrokes().push(curStroke); putSetting("notes:"+notesPieceId,notesData); } curStroke=null; }
+$("#inkcanvas").addEventListener("pointerup",endStroke);
+$("#inkcanvas").addEventListener("pointercancel",endStroke);
+$("#vUndo").onclick=()=>{ const s=pageStrokes(); if(s.length){ s.pop(); putSetting("notes:"+notesPieceId,notesData); renderInk(); } };
+$("#vClear").onclick=()=>{ if(!pageStrokes().length)return; if(!window.confirm("Notizen dieser Seite löschen?"))return; notesData.pages[String(vPage-1)]=[]; putSetting("notes:"+notesPieceId,notesData); renderInk(); };
 
 /* Suche */
 $("#search").addEventListener("input",e=>{ FILTER=e.target.value; render(); });
