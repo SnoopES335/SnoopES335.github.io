@@ -245,7 +245,10 @@
     </svg>
     <div><div class="word">Real<b>book</b></div><div class="count" id="count"></div></div>
   </div>
-  <div class="iconbtn" id="settingsBtn" title="Daten & Offline" style="background:rgba(255,255,255,.08);font-size:30px">⚙︎</div>
+  <div style="display:flex;gap:8px;margin-left:auto">
+    <div class="iconbtn" id="libBtn" title="Eigene Noten importieren & verwalten" style="background:rgba(255,255,255,.08);font-size:26px">＋</div>
+    <div class="iconbtn" id="settingsBtn" title="Daten & Offline" style="background:rgba(255,255,255,.08);font-size:30px">⚙︎</div>
+  </div>
   </div>
   <div class="tabs" id="tabs"></div>
   <div class="tabs" id="tagtabs"></div>
@@ -334,11 +337,26 @@ const S = {
 };
 const TUNES = window.TUNES.map((t,i)=>({...t, key:t.bid+'|'+t.t+'|'+t.pg, idx:i}));
 let USER = JSON.parse(localStorage.getItem('rb_usertunes')||'[]');  // annotated copies (metadata; page images in IndexedDB)
+let LIBTUNES = [];   // eigene importierte PDFs (Metadaten + Blob in IndexedDB, Store 'libtunes')
+let USERBOOKS = JSON.parse(localStorage.getItem('rb_userbooks')||'[]'); // [{bid,name,chip,createdAt}]
 let byKey = {};
-function ALL(){ return TUNES.concat(USER); }
+function ALL(){ return TUNES.concat(USER).concat(LIBTUNES); }
 function rebuildByKey(){ byKey={}; ALL().forEach(t=>byKey[t.key]=t); }
 rebuildByKey();
 function saveUser(){ localStorage.setItem('rb_usertunes', JSON.stringify(USER)); rebuildByKey(); }
+function saveUserBooks(){ localStorage.setItem('rb_userbooks', JSON.stringify(USERBOOKS)); }
+function userBook(bid){ return USERBOOKS.find(b=>b.bid===bid); }
+function newId(pfx){ return (pfx||'id')+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function libRecToTune(r){ return { key:'lib|'+r.id, libId:r.id, isLib:true, t:r.title||'(ohne Titel)', c:r.composer||'',
+    pg:r.pg||'1', b:(userBook(r.bid)||{}).name||'Eigene Noten', bid:r.bid, np:r.np||1, addedAt:r.addedAt||0, f:r._url||'' }; }
+async function loadLibrary(){
+  let recs=[]; try{ recs=await libAll(); }catch(e){ recs=[]; }
+  // alte Object-URLs freigeben
+  LIBTUNES.forEach(t=>{ if(t.f && t.f.startsWith('blob:')) try{ URL.revokeObjectURL(t.f); }catch(_){}; });
+  LIBTUNES = recs.map(r=>{ try{ r._url=URL.createObjectURL(r.blob); }catch(_){ r._url=''; } return libRecToTune(r); })
+                 .sort((a,b)=> (a.t||'').localeCompare(b.t||'','de'));
+  rebuildByKey();
+}
 /* ---- book display names + grouping (by bid; data.js unchanged) ---- */
 const BOOKMETA={
   realbook1:{name:'Real Book - Vol. 1',chip:'Vol. 1'},
@@ -369,8 +387,8 @@ const BOOK_GROUPS=[
   {label:'Eigenes', bids:['user']},
 ];
 const PRESENT_BIDS=new Set(TUNES.map(t=>t.bid));
-function bookName(t){ const m=BOOKMETA[t.bid]; return m?m.name:(t.b||t.bid); }
-function bookChip(bid){ const m=BOOKMETA[bid]; return m?m.chip:bid; }
+function bookName(t){ const m=BOOKMETA[t.bid]; if(m)return m.name; const u=userBook(t.bid); if(u)return u.name; return t.b||t.bid; }
+function bookChip(bid){ const m=BOOKMETA[bid]; if(m)return m.chip; const u=userBook(bid); if(u)return u.chip||u.name; return bid; }
 const ALLBOOKS=[...PRESENT_BIDS];
 
 function save(){
@@ -452,7 +470,7 @@ function renderTagTabs(){
 /* ---------- filter bars ---------- */
 function renderAZ(){
   const bar=document.getElementById('azbar'); bar.innerHTML='';
-  const present=new Set(TUNES.map(initialOf));
+  const present=new Set(ALL().map(initialOf));
   const letters=['#',...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')].filter(l=>present.has(l));
   letters.forEach(l=>{
     const c=document.createElement('div'); c.className='fchip azchip'+(S.initial===l?' active':''); c.textContent=l;
@@ -474,6 +492,19 @@ function renderBooks(){
     });
     bar.append(grp);
   });
+  // Eigene Bücher (importierte PDFs) als eigene Gruppe
+  if(USERBOOKS.length){
+    const grp=document.createElement('div'); grp.className='bookgroup';
+    const gt=document.createElement('div'); gt.className='gtitle'; gt.textContent='Eigene Bücher'; grp.append(gt);
+    const row=document.createElement('div'); row.className='chiprow'; grp.append(row);
+    USERBOOKS.forEach(ub=>{
+      const cnt=LIBTUNES.filter(t=>t.bid===ub.bid).length;
+      const c=document.createElement('div'); c.className='fchip'+(S.books.has(ub.bid)?' active':'');
+      c.textContent=bookChip(ub.bid)+(cnt?' · '+cnt:''); c.title=ub.name;
+      c.onclick=()=>{S.books.has(ub.bid)?S.books.delete(ub.bid):S.books.add(ub.bid);render();}; row.append(c);
+    });
+    bar.append(grp);
+  }
 }
 
 /* ---------- list ---------- */
@@ -685,6 +716,7 @@ function openViewer(t, keepNav){
   document.getElementById('vTitle').textContent=t.t;
   document.getElementById('vSub').textContent = t.isEdit
     ? ('✏️ '+(t.editor||'')+(t.editedAt?' — '+new Date(t.editedAt).toLocaleString('de-DE'):''))
+    : t.isLib ? ((t.c?t.c+' — ':'')+t.b)
     : ((t.c?t.c+' — ':'')+t.b+', S. '+t.pg);
   const frame=document.getElementById('vFrame'), fit=document.getElementById('vFit');
   document.getElementById('viewer').classList.remove('fullscreen'); fitOn=false;
@@ -698,6 +730,11 @@ function openViewer(t, keepNav){
     frame.style.display='none'; frame.src='about:blank';
     fit.style.display='flex'; document.getElementById('vTab').style.display='none';
     renderUserFit(t);
+  } else if(t.isLib){
+    // Importiertes PDF: direkt über PDF.js (Blob) einpassen – zuverlässiger als Blob im Iframe (Safari)
+    frame.style.display='none'; frame.src='about:blank';
+    fit.style.display='flex'; document.getElementById('vTab').style.display='none';
+    fitOn=true; renderPdfFit(t);
   } else {
     fit.style.display='none'; fit.innerHTML='';
     frame.style.display='block'; frame.src=encodeURI(t.f)+'#toolbar=1&view=FitH';
@@ -1228,6 +1265,96 @@ function openDataSheet(){
 }
 document.getElementById('settingsBtn').onclick=openDataSheet;
 
+/* ---------- Eigene Noten: Bücher anlegen, PDFs importieren, verwalten ---------- */
+function createBook(name){ name=(name||'').trim(); if(!name) return null;
+  const bid=newId('ub'); const chip=name.length>18?name.slice(0,16)+'…':name;
+  USERBOOKS.push({bid,name,chip,createdAt:Date.now()}); saveUserBooks(); return bid; }
+async function deleteBook(bid){ const ub=userBook(bid); if(!ub) return;
+  const own=LIBTUNES.filter(t=>t.bid===bid);
+  if(!confirm('Buch „'+ub.name+'" löschen'+(own.length?' – samt '+own.length+' Stück'+(own.length>1?'en':'')+'?':'?'))) return;
+  for(const t of own){ try{ await libDelete(t.libId); }catch(e){} }
+  USERBOOKS=USERBOOKS.filter(b=>b.bid!==bid); saveUserBooks(); S.books.delete(bid);
+  await loadLibrary(); render(); openLibrarySheet(); }
+async function importPdfs(bid, files){
+  let ok=0;
+  for(const file of files){
+    if(!/pdf$/i.test(file.type||'') && !/\.pdf$/i.test(file.name||'')) continue;
+    let np=1; try{ const buf=await file.arrayBuffer(); const doc=await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise; np=doc.numPages; }catch(e){}
+    const id=newId('lt'); const title=(file.name||'Stück').replace(/\.pdf$/i,'').trim()||'Stück';
+    try{ await libPut({id,bid,title,composer:'',addedAt:Date.now(),np,fileName:file.name,blob:file}); ok++; }catch(e){ alert('Import fehlgeschlagen: '+e.message); }
+  }
+  await loadLibrary(); render(); openLibrarySheet();
+  return ok;
+}
+async function saveLibMeta(id, patch){
+  // Atomares Lesen+Schreiben in EINER Transaktion: verhindert, dass ein verzögertes
+  // Speichern (z. B. beim Verlassen des Feldes) ein gerade gelöschtes Stück wieder aufleben lässt.
+  const db=await idb();
+  await new Promise((res,rej)=>{ const tx=db.transaction(IDB_LIB,'readwrite'), st=tx.objectStore(IDB_LIB);
+    const g=st.get(id); g.onsuccess=()=>{ const r=g.result; if(r){ Object.assign(r,patch); st.put(r); } };
+    tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); });
+  await loadLibrary(); render();
+}
+async function deleteLibTune(id){ const t=LIBTUNES.find(x=>x.libId===id);
+  if(!confirm('„'+((t&&t.t)||'Stück')+'" löschen?')) return;
+  try{ await libDelete(id); }catch(e){ alert('Löschen fehlgeschlagen: '+e.message); return; }
+  S.fav.delete('lib|'+id); S.prac.delete('lib|'+id); delete S.tuneTags['lib|'+id];
+  S.sets.forEach(st=>st.items=st.items.filter(k=>k!=='lib|'+id)); save();
+  await loadLibrary(); render(); openLibrarySheet(); }
+async function exportLibTune(id){ const r=await libGet(id); if(!r) return;
+  const a=document.createElement('a'); a.href=URL.createObjectURL(r.blob); a.download=safeName(r.title)+'.pdf';
+  document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); }
+
+function openLibrarySheet(){
+  openSheet(card=>{
+    card.innerHTML='<h2>Eigene Noten</h2><div class="muted" style="margin:-6px 0 14px">'
+      +'Lege eigene „Bücher" an und importiere PDF-Dateien (ein PDF = ein Stück). Sie erscheinen in der normalen Liste und lassen sich nach Buch filtern. Alles bleibt lokal auf dem Gerät.</div>';
+    // Neues Buch anlegen
+    const nb=document.createElement('div'); nb.className='newrow'; nb.style.cssText='display:flex;gap:8px;margin-bottom:6px';
+    nb.innerHTML='<input class="txt" id="nbName" placeholder="Name des neuen Buchs, z. B. Meine Standards" style="flex:1">'
+      +'<button class="btn" id="nbAdd">Anlegen</button>';
+    card.append(nb);
+    const doAdd=()=>{ const v=nb.querySelector('#nbName').value; if(!v.trim())return; const bid=createBook(v); nb.querySelector('#nbName').value=''; render(); openLibrarySheet(); };
+    nb.querySelector('#nbAdd').onclick=doAdd;
+    card.insertAdjacentHTML('beforeend','<div class="muted" style="margin:0 2px 12px">Tipp: mehrere PDFs lassen sich in einem Rutsch auswählen.</div>');
+    // Bücher + Stücke
+    if(!USERBOOKS.length){
+      card.insertAdjacentHTML('beforeend','<div class="muted" style="border-top:1px solid var(--line);padding-top:12px">Noch keine eigenen Bücher. Lege oben eines an.</div>');
+    }
+    USERBOOKS.forEach(ub=>{
+      const own=LIBTUNES.filter(t=>t.bid===ub.bid).sort((a,b)=>(a.t||'').localeCompare(b.t||'','de'));
+      const sec=document.createElement('div'); sec.style.cssText='border-top:1px solid var(--line);padding-top:12px;margin-top:12px';
+      const head=document.createElement('div'); head.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:8px';
+      head.innerHTML='<div class="lbl" style="margin:0;flex:1">'+esc(ub.name)+' <span class="muted">· '+own.length+' Stück'+(own.length===1?'':'e')+'</span></div>'
+        +'<button class="btn ghost" data-imp style="padding:6px 10px">＋ PDF</button>'
+        +'<button class="btn ghost" data-del style="padding:6px 10px">🗑</button>'
+        +'<input type="file" data-file accept="application/pdf,.pdf" multiple style="display:none">';
+      sec.append(head);
+      const fi=head.querySelector('[data-file]');
+      head.querySelector('[data-imp]').onclick=()=>fi.click();
+      fi.onchange=async e=>{ const fs=[...e.target.files]; if(!fs.length)return; head.querySelector('[data-imp]').textContent='…'; const n=await importPdfs(ub.bid,fs); };
+      head.querySelector('[data-del]').onclick=()=>deleteBook(ub.bid);
+      own.forEach(t=>{
+        const row=document.createElement('div'); row.style.cssText='display:flex;gap:6px;align-items:center;margin:6px 0';
+        row.innerHTML='<input class="txt" data-t value="'+esc(t.t)+'" placeholder="Titel" style="flex:2;min-width:0">'
+          +'<input class="txt" data-c value="'+esc(t.c||'')+'" placeholder="Komponist" style="flex:1;min-width:0">'
+          +'<button class="btn ghost" data-exp title="Exportieren" style="padding:6px 9px">⬇︎</button>'
+          +'<button class="btn ghost" data-x title="Löschen" style="padding:6px 9px">✕</button>';
+        row.querySelector('[data-t]').onchange=e=>saveLibMeta(t.libId,{title:e.target.value.trim()||'Stück'});
+        row.querySelector('[data-c]').onchange=e=>saveLibMeta(t.libId,{composer:e.target.value.trim()});
+        row.querySelector('[data-exp]').onclick=()=>exportLibTune(t.libId);
+        row.querySelector('[data-x]').onclick=()=>deleteLibTune(t.libId);
+        sec.append(row);
+      });
+      card.append(sec);
+    });
+    const close=document.createElement('div'); close.className='row'; close.style.marginTop='16px';
+    close.innerHTML='<button class="btn" id="libDone" style="flex:1">Fertig</button>'; card.append(close);
+    close.querySelector('#libDone').onclick=closeSheet;
+  });
+}
+document.getElementById('libBtn').onclick=openLibrarySheet;
+
 /* ============ PDF.js, sticky search, fit view, annotation ============ */
 if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='vendor/pdfjs/pdf.worker.min.js';
 
@@ -1311,11 +1438,19 @@ let _rz; window.addEventListener('resize',()=>{ clearTimeout(_rz); _rz=setTimeou
   if(document.getElementById('viewer').classList.contains('open')&&CURRENT){ if(CURRENT.isEdit)renderUserFit(CURRENT); else if(fitOn)renderPdfFit(CURRENT); }
 },250); });
 
-/* ---- IndexedDB: annotated page images ---- */
-const IDB_DB='realbook', IDB_ST='pages';
-function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open(IDB_DB,1);
-  r.onupgradeneeded=()=>{ const db=r.result; if(!db.objectStoreNames.contains(IDB_ST)) db.createObjectStore(IDB_ST,{keyPath:'id'}); };
+/* ---- IndexedDB: annotated page images ('pages') + eigene importierte PDFs ('libtunes') ---- */
+const IDB_DB='realbook', IDB_ST='pages', IDB_LIB='libtunes';
+function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open(IDB_DB,2);
+  r.onupgradeneeded=()=>{ const db=r.result;
+    if(!db.objectStoreNames.contains(IDB_ST)) db.createObjectStore(IDB_ST,{keyPath:'id'});
+    if(!db.objectStoreNames.contains(IDB_LIB)) db.createObjectStore(IDB_LIB,{keyPath:'id'}); };
   r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+/* Bibliothek: ein Datensatz je Stück = {id,bid,title,composer,addedAt,np,fileName,blob} */
+async function libAll(){ const db=await idb(); return new Promise((res,rej)=>{ const tx=db.transaction(IDB_LIB,'readonly'),st=tx.objectStore(IDB_LIB),out=[],c=st.openCursor();
+  c.onsuccess=e=>{ const cur=e.target.result; if(cur){ out.push(cur.value); cur.continue(); } else res(out); }; c.onerror=()=>rej(c.error); }); }
+async function libGet(id){ const db=await idb(); return new Promise((res,rej)=>{ const tx=db.transaction(IDB_LIB,'readonly'),g=tx.objectStore(IDB_LIB).get(id); g.onsuccess=()=>res(g.result); g.onerror=()=>rej(g.error); }); }
+async function libPut(rec){ const db=await idb(); return new Promise((res,rej)=>{ const tx=db.transaction(IDB_LIB,'readwrite'); tx.objectStore(IDB_LIB).put(rec); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
+async function libDelete(id){ const db=await idb(); return new Promise((res,rej)=>{ const tx=db.transaction(IDB_LIB,'readwrite'); tx.objectStore(IDB_LIB).delete(id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
 async function idbPutPages(uk,arr){ const db=await idb(); return new Promise((res,rej)=>{ const tx=db.transaction(IDB_ST,'readwrite'),st=tx.objectStore(IDB_ST);
   arr.forEach((d,i)=>st.put({id:uk+'#'+i,userKey:uk,page:i,data:d})); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
 async function idbGetPages(uk){ const db=await idb(); return new Promise((res,rej)=>{ const tx=db.transaction(IDB_ST,'readonly'),st=tx.objectStore(IDB_ST),out=[],c=st.openCursor();
@@ -1518,7 +1653,7 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-19 · Pencil-Fix 6';
+const APP_BUILD='2026-07-19 · Import v1';
 (function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
@@ -1530,6 +1665,8 @@ if('serviceWorker' in navigator){
 }
 
 render();
+/* eigene importierte Noten aus IndexedDB nachladen und Liste aktualisieren */
+loadLibrary().then(render).catch(()=>{});
 </script>
 </body>
 </html>
