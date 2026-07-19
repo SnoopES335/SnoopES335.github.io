@@ -256,7 +256,7 @@
 </header>
 
 <div class="controls" id="controls">
-  <input type="search" id="q" placeholder="Suche: Titel, Komponist, Interpret…" autocomplete="off" autocorrect="off" spellcheck="false">
+  <input type="search" id="q" placeholder="Suche: Titel, Komponist, Interpret…" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" enterkeyhint="search">
   <div class="collapse-row">
     <div class="collapse-h" id="bookToggle" title="Bücher-Auswahl auf-/zuklappen"><div class="lbl">Bücher</div><span class="arrow">▾</span></div>
     <div class="collapse-h" id="azToggle" title="Anfangsbuchstaben auf-/zuklappen"><div class="lbl">Anfangsbuchstabe</div><span class="arrow">▾</span></div>
@@ -1863,7 +1863,7 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-19 · Trefferzeile';
+const APP_BUILD='2026-07-19 · Suche ohne Caps';
 (function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
