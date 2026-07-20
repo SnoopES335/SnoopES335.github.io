@@ -1,13 +1,307 @@
-Realbook · Abgleich-Test
-Prüft, ob die Dropbox-Anmeldung und das Schreiben in den App-Ordner auf dem iPad in Safari verlässlich laufen.
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sync-Test">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230a5cff'/%3E%3Ctext x='50' y='68' font-size='58' text-anchor='middle' fill='white'%3E%E2%86%BB%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%230a5cff'/%3E%3Ctext x='50' y='70' font-size='60' text-anchor='middle' fill='white'%3E%E2%86%BB%3C/text%3E%3C/svg%3E">
+<title>Realbook · Dropbox-Abgleich-Test</title>
+<style>
+  :root { --bg:#101418; --card:#1b2129; --ink:#eef2f6; --muted:#9aa7b4; --line:#2b333d;
+          --ok:#3ecf8e; --bad:#ff6b6b; --warn:#f0b429; --accent:#3b82f6; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:680px; margin:0 auto; padding:20px 16px 60px;
+    padding-top:calc(20px + env(safe-area-inset-top)); }
+  h1 { font-size:20px; margin:0 0 2px; }
+  .sub { color:var(--muted); font-size:13px; margin:0 0 18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:16px; margin:0 0 14px; }
+  .state { display:flex; align-items:center; gap:10px; font-size:17px; font-weight:600; }
+  .dot { width:12px; height:12px; border-radius:50%; background:var(--muted); flex:0 0 auto; }
+  .dot.ok { background:var(--ok); } .dot.bad { background:var(--bad); } .dot.warn { background:var(--warn); }
+  .kv { margin-top:10px; font-size:14px; color:var(--muted); }
+  .kv b { color:var(--ink); font-weight:600; }
+  button { appearance:none; border:0; border-radius:11px; padding:14px 16px; font-size:16px;
+    font-weight:600; color:#fff; background:var(--accent); width:100%; margin:8px 0 0; cursor:pointer; }
+  button.secondary { background:#2b3945; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--muted); font-weight:500; }
+  button:disabled { opacity:.45; }
+  .row { display:flex; gap:10px; } .row button { margin-top:8px; }
+  .big { background:#0a5cff; }
+  .log { background:#0c1013; border:1px solid var(--line); border-radius:12px; padding:12px;
+    font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; color:#cdd6df;
+    white-space:pre-wrap; word-break:break-word; max-height:260px; overflow:auto; margin-top:8px; }
+  .hint { font-size:12.5px; color:var(--muted); margin-top:8px; }
+  .foot { text-align:center; color:#5a6672; font-size:11.5px; margin-top:22px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Realbook · Abgleich-Test</h1>
+  <p class="sub">Prüft, ob die Dropbox-Anmeldung und das Schreiben in den App-Ordner auf dem iPad in Safari verlässlich laufen.</p>
 
-Prüfe…
+  <div class="card">
+    <div class="state"><span id="dot" class="dot"></span><span id="stateText">Prüfe…</span></div>
+    <div class="kv" id="details"></div>
+  </div>
 
-Mit Dropbox anmelden
-Testdatei schreiben
-Testdatei lesen
-Verbindung prüfen — ohne Neu-Anmeldung Abmelden & zurücksetzen
-Für die Haltbarkeitsprobe: erst anmelden und einmal schreiben. Am nächsten Tag die Seite erneut öffnen und „Verbindung prüfen" antippen — ohne dich neu anzumelden. Klappt das, hält die Anmeldung.
-Protokoll
+  <div class="card">
+    <button id="loginBtn" class="big">Mit Dropbox anmelden</button>
+    <div class="row">
+      <button id="writeBtn" class="secondary" disabled>Testdatei schreiben</button>
+      <button id="readBtn" class="secondary" disabled>Testdatei lesen</button>
+    </div>
+    <button id="checkBtn" class="ghost" disabled>Verbindung prüfen — ohne Neu-Anmeldung</button>
+    <button id="logoutBtn" class="ghost">Abmelden &amp; zurücksetzen</button>
+    <p class="hint">Für die Haltbarkeitsprobe: erst anmelden und einmal schreiben. Am nächsten Tag die Seite erneut öffnen und <b>„Verbindung prüfen"</b> antippen — ohne dich neu anzumelden. Klappt das, hält die Anmeldung.</p>
+  </div>
 
+  <div class="card">
+    <div style="font-weight:600; font-size:14px;">Protokoll</div>
+    <div id="log" class="log"></div>
+  </div>
 
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var BUILD = "sync-test v1 (2026-07-20)";
+  var APP_KEY = "fsn69fl4zqqc4ti";
+  var REDIRECT = location.origin + location.pathname.replace(/index\.html$/, "");
+  var FILE_PATH = "/sync-test.json";           // relativ zum App-Ordner
+  var LS = {
+    refresh: "st_refresh", access: "st_access", exp: "st_exp",
+    acct: "st_acct", verifier: "st_verifier",
+    lastWrite: "st_lastwrite", lastRead: "st_lastread", lastAuth: "st_lastauth", log: "st_log"
+  };
+
+  var $ = function(id){ return document.getElementById(id); };
+  var dot=$("dot"), stateText=$("stateText"), details=$("details"), logEl=$("log"), foot=$("foot");
+  var loginBtn=$("loginBtn"), writeBtn=$("writeBtn"), readBtn=$("readBtn"), checkBtn=$("checkBtn"), logoutBtn=$("logoutBtn");
+  foot.textContent = BUILD + " · App key " + APP_KEY.slice(0,4) + "… · " + (window.navigator.standalone ? "installierte App" : "im Browser");
+
+  // ---------- kleine Helfer ----------
+  function now(){ try { return new Date(); } catch(e){ return null; } }
+  function stamp(d){ if(!d) d=now(); if(!d) return "?"; return d.toLocaleString("de-DE"); }
+  function get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+  function set(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+  function del(k){ try { localStorage.removeItem(k); } catch(e){} }
+
+  function log(msg, cls){
+    var d = now();
+    var t = d ? d.toLocaleTimeString("de-DE") : "--:--:--";
+    var line = "[" + t + "] " + msg;
+    var prev = get(LS.log) || "";
+    prev = (prev ? prev + "\n" : "") + line;
+    var lines = prev.split("\n"); if(lines.length>200) lines = lines.slice(lines.length-200);
+    prev = lines.join("\n"); set(LS.log, prev);
+    logEl.textContent = prev; logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function b64url(bytes){
+    var s = ""; var b = new Uint8Array(bytes);
+    for(var i=0;i<b.length;i++) s += String.fromCharCode(b[i]);
+    return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  }
+  function randVerifier(){
+    var a = new Uint8Array(64); crypto.getRandomValues(a); return b64url(a);
+  }
+  function challengeFrom(verifier){
+    var data = new TextEncoder().encode(verifier);
+    return crypto.subtle.digest("SHA-256", data).then(function(h){ return b64url(h); });
+  }
+
+  // ---------- Anzeige ----------
+  function setState(kind, text){
+    dot.className = "dot" + (kind ? " "+kind : "");
+    stateText.textContent = text;
+  }
+  function refreshDetails(){
+    var hasRefresh = !!get(LS.refresh);
+    var exp = parseInt(get(LS.exp)||"0",10);
+    var expTxt = exp ? stamp(new Date(exp)) : "—";
+    var rows = [];
+    rows.push("Gespeicherte Anmeldung (Refresh-Token): <b>" + (hasRefresh ? "vorhanden" : "keine") + "</b>");
+    rows.push("Aktuelles Zugangs-Token gültig bis: <b>" + expTxt + "</b>");
+    rows.push("Letzte erfolgreiche Anmeldung/Prüfung: <b>" + (get(LS.lastAuth) || "—") + "</b>");
+    rows.push("Letzter erfolgreicher Schreibzugriff: <b>" + (get(LS.lastWrite) || "—") + "</b>");
+    rows.push("Letzter erfolgreicher Lesezugriff: <b>" + (get(LS.lastRead) || "—") + "</b>");
+    details.innerHTML = rows.join("<br>");
+    var signedIn = hasRefresh;
+    writeBtn.disabled = !signedIn; readBtn.disabled = !signedIn; checkBtn.disabled = !signedIn;
+    loginBtn.textContent = signedIn ? "Neu anmelden (falls nötig)" : "Mit Dropbox anmelden";
+  }
+
+  // ---------- OAuth ----------
+  function startLogin(){
+    var v = randVerifier(); set(LS.verifier, v);
+    log("Starte Anmeldung… (leite zu Dropbox weiter)");
+    challengeFrom(v).then(function(ch){
+      var u = "https://www.dropbox.com/oauth2/authorize"
+        + "?client_id=" + encodeURIComponent(APP_KEY)
+        + "&response_type=code"
+        + "&code_challenge=" + encodeURIComponent(ch)
+        + "&code_challenge_method=S256"
+        + "&token_access_type=offline"
+        + "&redirect_uri=" + encodeURIComponent(REDIRECT);
+      location.href = u;
+    }).catch(function(e){ log("Fehler beim Vorbereiten der Anmeldung: " + e, "bad"); });
+  }
+
+  function form(obj){
+    return Object.keys(obj).map(function(k){
+      return encodeURIComponent(k) + "=" + encodeURIComponent(obj[k]);
+    }).join("&");
+  }
+
+  function exchangeCode(code){
+    var v = get(LS.verifier);
+    log("Tausche Anmelde-Code gegen Token…");
+    return fetch("https://api.dropboxapi.com/oauth2/token", {
+      method:"POST",
+      headers:{ "Content-Type":"application/x-www-form-urlencoded" },
+      body: form({ code:code, grant_type:"authorization_code", client_id:APP_KEY,
+                   redirect_uri:REDIRECT, code_verifier:v||"" })
+    }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+      .then(function(res){
+        if(!res.ok){ throw new Error("Token-Antwort: " + JSON.stringify(res.j)); }
+        var j = res.j;
+        if(j.refresh_token) set(LS.refresh, j.refresh_token);
+        if(j.access_token){ set(LS.access, j.access_token);
+          set(LS.exp, String((now()?now().getTime():0) + (j.expires_in||14400)*1000)); }
+        if(j.account_id) set(LS.acct, j.account_id);
+        set(LS.lastAuth, stamp());
+        del(LS.verifier);
+        log("Anmeldung erfolgreich. Refresh-Token gespeichert.", "ok");
+      });
+  }
+
+  function refreshAccess(){
+    var rt = get(LS.refresh);
+    if(!rt) return Promise.reject(new Error("keine gespeicherte Anmeldung"));
+    log("Erneuere Zugangs-Token über gespeicherte Anmeldung…");
+    return fetch("https://api.dropboxapi.com/oauth2/token", {
+      method:"POST",
+      headers:{ "Content-Type":"application/x-www-form-urlencoded" },
+      body: form({ grant_type:"refresh_token", refresh_token:rt, client_id:APP_KEY })
+    }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+      .then(function(res){
+        if(!res.ok){
+          if(res.j && (res.j.error==="invalid_grant" || res.j.error_description)) {
+            log("Gespeicherte Anmeldung ungültig — Neu-Anmeldung nötig: " + JSON.stringify(res.j), "warn");
+            del(LS.refresh);
+          }
+          throw new Error("Refresh fehlgeschlagen: " + JSON.stringify(res.j));
+        }
+        var j = res.j;
+        set(LS.access, j.access_token);
+        set(LS.exp, String((now()?now().getTime():0) + (j.expires_in||14400)*1000));
+        set(LS.lastAuth, stamp());
+        log("Zugangs-Token erneuert — Anmeldung hält.", "ok");
+        return j.access_token;
+      });
+  }
+
+  // gültiges Access-Token besorgen (erneuern falls abgelaufen)
+  function token(){
+    var at = get(LS.access); var exp = parseInt(get(LS.exp)||"0",10);
+    var t = now()?now().getTime():0;
+    if(at && exp && t < exp - 60000) return Promise.resolve(at);
+    return refreshAccess();
+  }
+
+  // ---------- Dateizugriff ----------
+  function writeFile(){
+    var payload = { app:"realbook", kind:"synctest", schema:1,
+      geschrieben_am: stamp(), build: BUILD,
+      geraet: (window.navigator.standalone ? "installierte App" : "Browser") };
+    var body = JSON.stringify(payload, null, 2);
+    return token().then(function(at){
+      log("Schreibe Testdatei in den App-Ordner…");
+      return fetch("https://content.dropboxapi.com/2/files/upload", {
+        method:"POST",
+        headers:{
+          "Authorization":"Bearer " + at,
+          "Dropbox-API-Arg": JSON.stringify({ path:FILE_PATH, mode:"overwrite", mute:true }),
+          "Content-Type":"application/octet-stream"
+        },
+        body: body
+      });
+    }).then(function(r){ return r.text().then(function(tx){ return {ok:r.ok, tx:tx}; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error("Upload-Fehler: " + res.tx);
+        set(LS.lastWrite, stamp());
+        log("Testdatei geschrieben ✔ (in Dropbox unter Apps/…/sync-test.json)", "ok");
+        refreshDetails();
+      });
+  }
+
+  function readFile(){
+    return token().then(function(at){
+      log("Lese Testdatei…");
+      return fetch("https://content.dropboxapi.com/2/files/download", {
+        method:"POST",
+        headers:{
+          "Authorization":"Bearer " + at,
+          "Dropbox-API-Arg": JSON.stringify({ path:FILE_PATH })
+        }
+      });
+    }).then(function(r){ return r.text().then(function(tx){ return {ok:r.ok, tx:tx}; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error("Lese-Fehler: " + res.tx);
+        set(LS.lastRead, stamp());
+        log("Gelesen ✔ Inhalt:\n" + res.tx, "ok");
+        refreshDetails();
+      });
+  }
+
+  // ---------- Buttons ----------
+  function guard(p){ return p.then(refreshDetails).catch(function(e){ log("⚠ " + (e && e.message ? e.message : e), "bad"); refreshDetails(); }); }
+  loginBtn.addEventListener("click", startLogin);
+  writeBtn.addEventListener("click", function(){ guard(writeFile()); });
+  readBtn.addEventListener("click", function(){ guard(readFile()); });
+  checkBtn.addEventListener("click", function(){
+    log("— Verbindungsprüfung ohne Neu-Anmeldung —");
+    guard(refreshAccess().then(function(){ return writeFile(); }).then(function(){
+      setState("ok","Anmeldung hält — Zugriff ok"); }));
+  });
+  logoutBtn.addEventListener("click", function(){
+    [LS.refresh,LS.access,LS.exp,LS.acct,LS.verifier,LS.lastWrite,LS.lastRead,LS.lastAuth].forEach(del);
+    log("Zurückgesetzt. Alle gespeicherten Daten gelöscht.");
+    setState("","Nicht angemeldet"); refreshDetails();
+  });
+
+  // ---------- Start ----------
+  function boot(){
+    logEl.textContent = get(LS.log) || "";
+    var q = location.search;
+    if(q.indexOf("code=")>=0){
+      var code = new URLSearchParams(q).get("code");
+      history.replaceState({}, "", REDIRECT); // Code aus der Adresse entfernen
+      setState("warn","Melde an…");
+      guard(exchangeCode(code).then(function(){ setState("ok","Angemeldet"); }));
+      return;
+    }
+    if(q.indexOf("error=")>=0){
+      var err = new URLSearchParams(q).get("error_description") || new URLSearchParams(q).get("error");
+      history.replaceState({}, "", REDIRECT);
+      log("Dropbox meldete einen Fehler: " + err, "bad");
+      setState("bad","Anmeldung abgebrochen");
+    }
+    if(get(LS.refresh)){ setState("ok","Angemeldet (gespeichert)"); }
+    else { setState("","Nicht angemeldet"); }
+    refreshDetails();
+    log("Seite geladen. " + (window.navigator.standalone ? "Läuft als installierte App." : "Läuft im Browser-Tab."));
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
