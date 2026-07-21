@@ -1873,7 +1873,7 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-19 · Notiz-Titel';
+const APP_BUILD='2026-07-21 · Cloud-Abgleich';
 (function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
@@ -1887,6 +1887,329 @@ if('serviceWorker' in navigator){
 render();
 /* eigene importierte Noten aus IndexedDB nachladen und Liste aktualisieren */
 loadLibrary().then(render).catch(()=>{});
+
+/* ============================================================================
+   Cloud-Abgleich (Dropbox) — Phase 4, Baustein „Cloud-Abgleich"
+   Eigenständige Schicht. Rührt bestehende Daten nur über read()/write() an.
+   Modell: je Kategorie Karte id -> {wert}, dazu eigene Meta id -> {u:updatedAt, d:deleted}.
+   Merge: pro id gewinnt größerer u (auch Tombstone). Löschungen werden per Snapshot-Diff erkannt.
+   „neuere gewinnt" + lokale Sicherungskopie vor jedem Übernehmen. Nur User-State, NIE Noten/PDFs.
+   ========================================================================== */
+(function(){
+  "use strict";
+  const APP_KEY = 'fsn69fl4zqqc4ti';
+  const REDIRECT = location.origin + location.pathname.replace(/index\.html$/,'');
+  const AUTH = 'https://www.dropbox.com/oauth2/authorize';
+  const TOKEN = 'https://api.dropboxapi.com/oauth2/token';
+  const UP = 'https://content.dropboxapi.com/2/files/upload';
+  const DL = 'https://content.dropboxapi.com/2/files/download';
+
+  const K = { ref:'rb_dbx_refresh', acc:'rb_dbx_access', exp:'rb_dbx_exp', ver:'rb_dbx_verifier',
+    meta:'rb_sync_meta', snap:'rb_sync_snap', backup:'rb_sync_backup', auto:'rb_sync_auto',
+    last:'rb_sync_last', dev:'rb_sync_device' };
+
+  const lsGet = k => { try { return localStorage.getItem(k); } catch(e){ return null; } };
+  const lsSet = (k,v) => { try { localStorage.setItem(k,v); } catch(e){} };
+  const lsDel = k => { try { localStorage.removeItem(k); } catch(e){} };
+  const jget = (k,d) => { try { return JSON.parse(lsGet(k)) ?? d; } catch(e){ return d; } };
+  const jset = (k,v) => lsSet(k, JSON.stringify(v));
+
+  let META = jget(K.meta, {});
+  let SNAP = jget(K.snap, {});
+  let deviceId = lsGet(K.dev); if(!deviceId){ deviceId = 'd_'+Math.random().toString(36).slice(2,9); lsSet(K.dev, deviceId); }
+  let statusText = '';
+  let _busy = false, _pending = false, _debounce = null, _lastAuto = 0;
+
+  const now = () => Date.now();
+  const stamp = t => { try { return new Date(t).toLocaleString('de-DE'); } catch(e){ return '?'; } };
+
+  /* ---------- Kategorien: read() -> {id:wert}, write(map) zurück in den App-State ---------- */
+  const CATS = {
+    setlists: { file:'setlists',
+      read: () => Object.fromEntries((S.sets||[]).map(s=>[s.id, s])),
+      write: m => { S.sets = Object.values(m); }, persist: () => save() },
+    tags: { file:'tags',
+      read: () => Object.fromEntries((S.tags||[]).map(t=>[t.id, t])),
+      write: m => { S.tags = Object.values(m); }, persist: () => save() },
+    tunetags: { file:'tunetags',
+      read: () => { const o={}; for(const k in S.tuneTags){ if((S.tuneTags[k]||[]).length) o[k]=S.tuneTags[k]; } return o; },
+      write: m => { const o={}; for(const k in m){ if((m[k]||[]).length) o[k]=m[k]; } S.tuneTags = o; }, persist: () => save() },
+    favorites: { file:'favorites',
+      read: () => { const o={}; S.fav.forEach(k=>o[k]=1); return o; },
+      write: m => { S.fav = new Set(Object.keys(m)); }, persist: () => save() },
+    practice: { file:'practice',
+      read: () => { const o={}; S.prac.forEach(k=>o[k]=1); return o; },
+      write: m => { S.prac = new Set(Object.keys(m)); }, persist: () => save() },
+    overrides: { file:'overrides',
+      read: () => { const o={}; for(const k in OVERRIDES) o[k]=OVERRIDES[k]; return o; },
+      write: m => { for(const k in OVERRIDES) delete OVERRIDES[k]; for(const k in m) OVERRIDES[k]=m[k]; },
+      persist: () => { saveOverrides(); reapplyOverrides(); } }
+  };
+  const CAT_KEYS = Object.keys(CATS);
+
+  /* Overrides nach einem Sync erneut auf die Großsammlung anwenden (Titel/Komponist live). */
+  function reapplyOverrides(){
+    try {
+      TUNES.forEach(t => { const o=OVERRIDES[t.key];
+        t.t = (o && typeof o.t==='string' && o.t) ? o.t : t._ot;
+        t.c = (o && typeof o.c==='string') ? o.c : (t._oc||''); });
+      rebuildByKey();
+    } catch(e){}
+  }
+
+  /* ---------- lokale Sicherung (Ring, letzte 20) ---------- */
+  function backup(cat, dataMap){
+    try {
+      const ring = jget(K.backup, []);
+      ring.push({ t: now(), cat, data: dataMap });
+      while(ring.length > 20) ring.shift();
+      jset(K.backup, ring);
+    } catch(e){}
+  }
+
+  /* ---------- PKCE / OAuth ---------- */
+  function b64url(buf){ const b=new Uint8Array(buf); let s=''; for(let i=0;i<b.length;i++) s+=String.fromCharCode(b[i]);
+    return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+  function randVerifier(){ const a=new Uint8Array(64); crypto.getRandomValues(a); return b64url(a); }
+  function challenge(v){ return crypto.subtle.digest('SHA-256', new TextEncoder().encode(v)).then(b64url); }
+  function form(o){ return Object.keys(o).map(k=>encodeURIComponent(k)+'='+encodeURIComponent(o[k])).join('&'); }
+
+  function startLogin(){
+    const v = randVerifier(); lsSet(K.ver, v);
+    setStatus('Leite zu Dropbox weiter…');
+    challenge(v).then(ch => {
+      location.href = AUTH + '?client_id='+encodeURIComponent(APP_KEY)
+        + '&response_type=code&code_challenge='+encodeURIComponent(ch)
+        + '&code_challenge_method=S256&token_access_type=offline'
+        + '&redirect_uri='+encodeURIComponent(REDIRECT);
+    }).catch(e => setStatus('Fehler beim Anmelden: '+e));
+  }
+
+  function exchangeCode(code){
+    const v = lsGet(K.ver);
+    return fetch(TOKEN, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: form({ code, grant_type:'authorization_code', client_id:APP_KEY, redirect_uri:REDIRECT, code_verifier:v||'' }) })
+      .then(r => r.json().then(j => ({ok:r.ok, j}))).then(res => {
+        if(!res.ok) throw new Error('Anmeldung fehlgeschlagen: '+JSON.stringify(res.j));
+        const j = res.j;
+        if(j.refresh_token) lsSet(K.ref, j.refresh_token);
+        if(j.access_token){ lsSet(K.acc, j.access_token); lsSet(K.exp, String(now()+(j.expires_in||14400)*1000)); }
+        lsDel(K.ver);
+      });
+  }
+
+  function refreshAccess(){
+    const rt = lsGet(K.ref);
+    if(!rt) return Promise.reject(new Error('nicht verbunden'));
+    return fetch(TOKEN, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: form({ grant_type:'refresh_token', refresh_token:rt, client_id:APP_KEY }) })
+      .then(r => r.json().then(j => ({ok:r.ok, j}))).then(res => {
+        if(!res.ok){
+          if(res.j && res.j.error==='invalid_grant'){ lsDel(K.ref); lsDel(K.acc); lsDel(K.exp); }
+          throw new Error('Anmeldung abgelaufen — bitte neu verbinden.');
+        }
+        lsSet(K.acc, res.j.access_token); lsSet(K.exp, String(now()+(res.j.expires_in||14400)*1000));
+        return res.j.access_token;
+      });
+  }
+
+  function token(){
+    const at = lsGet(K.acc), exp = parseInt(lsGet(K.exp)||'0',10);
+    if(at && exp && now() < exp-60000) return Promise.resolve(at);
+    return refreshAccess();
+  }
+
+  function isConnected(){ return !!lsGet(K.ref); }
+  function autoOn(){ return lsGet(K.auto) !== '0'; }
+
+  /* ---------- Dropbox Datei-Zugriff (relativ zum App-Ordner) ---------- */
+  function download(file){
+    return token().then(at => fetch(DL, { method:'POST', headers:{
+        'Authorization':'Bearer '+at, 'Dropbox-API-Arg': JSON.stringify({ path:'/state/'+file+'.json' }) } }))
+      .then(r => r.text().then(tx => ({ok:r.ok, tx})))
+      .then(res => {
+        if(res.ok){ try { return JSON.parse(res.tx); } catch(e){ return null; } }
+        if(res.tx && res.tx.indexOf('not_found') >= 0) return null;   // Datei existiert noch nicht
+        throw new Error('Laden ('+file+'): '+res.tx.slice(0,160));
+      });
+  }
+  function upload(file, obj){
+    const body = JSON.stringify(obj);
+    return token().then(at => fetch(UP, { method:'POST', headers:{
+        'Authorization':'Bearer '+at,
+        'Dropbox-API-Arg': JSON.stringify({ path:'/state/'+file+'.json', mode:'overwrite', mute:true }),
+        'Content-Type':'application/octet-stream' }, body }))
+      .then(r => { if(!r.ok) return r.text().then(t => { throw new Error('Hochladen ('+file+'): '+t.slice(0,160)); }); });
+  }
+
+  /* ---------- Merge einer Kategorie ---------- */
+  function syncCat(cat){
+    const cfg = CATS[cat];
+    const local = cfg.read();
+    const meta = META[cat] || (META[cat] = {});
+    const snap = SNAP[cat] || (SNAP[cat] = {});
+    const t = now();
+
+    // 1. lokale Änderungen seit letztem Sync erkennen (per Snapshot-Diff)
+    const localIds = Object.keys(local);
+    const localSet = new Set(localIds);
+    localIds.forEach(id => {
+      const ser = JSON.stringify(local[id]);
+      if(snap[id] !== ser){
+        const nu = (local[id] && typeof local[id].updatedAt==='number') ? local[id].updatedAt : null;
+        meta[id] = { u: nu!=null ? Math.max(nu, (meta[id]&&meta[id].u)||0) : t, d:false };
+      } else if(meta[id] && meta[id].d){ meta[id] = { u:t, d:false }; }
+      if(!meta[id]) meta[id] = { u:t, d:false };
+    });
+    Object.keys(snap).forEach(id => {
+      if(!localSet.has(id) && !(meta[id] && meta[id].d)) meta[id] = { u:t, d:true }; // lokal gelöscht -> Tombstone
+    });
+
+    // 2. Remote holen und mergen
+    return download(cfg.file).then(remote => {
+      const rItems = (remote && remote.items) || {};
+      const rMeta  = (remote && remote.meta)  || {};
+      const ids = new Set([].concat(Object.keys(meta), Object.keys(rMeta), Object.keys(local), Object.keys(rItems)));
+      const outItems = {}, outMeta = {};
+      ids.forEach(id => {
+        const lm = meta[id] || (local[id]!==undefined ? {u:0,d:false} : null);
+        const rm = rMeta[id] || (rItems[id]!==undefined ? {u:0,d:false} : null);
+        let side;
+        if(lm && rm) side = (rm.u||0) > (lm.u||0) ? 'r' : 'l';   // Gleichstand -> lokal
+        else side = lm ? 'l' : 'r';
+        const wm = side==='l' ? lm : rm;
+        outMeta[id] = { u: wm.u||0, d: !!wm.d };
+        if(!wm.d){
+          let v = side==='l' ? local[id] : rItems[id];
+          if(v===undefined) v = side==='l' ? rItems[id] : local[id];
+          if(v!==undefined) outItems[id] = v; else outMeta[id].d = true;
+        }
+      });
+      // Tombstones > 90 Tage aufräumen
+      const cutoff = t - 90*24*3600*1000;
+      Object.keys(outMeta).forEach(id => { if(outMeta[id].d && (outMeta[id].u||0) < cutoff) delete outMeta[id]; });
+
+      // 3. Ergebnis übernehmen (mit Sicherung), Snapshot/Meta aktualisieren
+      const localSer = JSON.stringify(local);
+      const mergedSer = JSON.stringify(outItems);
+      const changedLocally = localSer !== mergedSer;
+      _busy = true;
+      try {
+        if(changedLocally){ backup(cat, local); cfg.write(outItems); cfg.persist(); }
+      } finally { _busy = false; }
+      const newSnap = {}; Object.keys(outItems).forEach(id => newSnap[id] = JSON.stringify(outItems[id]));
+      SNAP[cat] = newSnap; META[cat] = outMeta;
+
+      // 4. hochladen, falls Remote abweicht
+      const needUp = JSON.stringify({items:rItems, meta:rMeta}) !== JSON.stringify({items:outItems, meta:outMeta});
+      return (needUp ? upload(cfg.file, { schema:1, kind:cat, updatedAt:t, device:deviceId, items:outItems, meta:outMeta }) : Promise.resolve())
+        .then(() => ({ cat, changedLocally, needUp }));
+    });
+  }
+
+  /* ---------- Kompletter Abgleich ---------- */
+  function syncAll(manual){
+    if(_syncRunning){ _pending = true; return _syncRunning; }
+    if(!isConnected()) return Promise.resolve();
+    setStatus('Gleiche ab…');
+    let anyLocal = false;
+    const run = CAT_KEYS.reduce((p, cat) => p.then(() => syncCat(cat).then(r => { if(r && r.changedLocally) anyLocal = true; })
+        .catch(e => { setStatus('⚠ '+ (e && e.message ? e.message : e)); throw e; })), Promise.resolve());
+    _syncRunning = run.then(() => {
+      jset(K.meta, META); jset(K.snap, SNAP); lsSet(K.last, String(now()));
+      if(anyLocal){ try { render(); } catch(e){} }
+      setStatus('Abgeglichen · '+stamp(now()));
+    }).catch(() => {}).then(() => {
+      _syncRunning = null;
+      if(_pending){ _pending = false; return syncAll(); }
+    });
+    return _syncRunning;
+  }
+  let _syncRunning = null;
+
+  /* ---------- Auto-Trigger nach lokaler Änderung (entprellt) ---------- */
+  function onLocalChange(){
+    if(!isConnected() || !autoOn()) return;
+    clearTimeout(_debounce);
+    _debounce = setTimeout(() => syncAll(), 3000);
+  }
+
+  /* save()/saveOverrides() umschließen → automatischer Abgleich nach jeder Änderung */
+  function wrap(name){
+    const orig = window[name];
+    if(typeof orig !== 'function') return;
+    window[name] = function(){ const r = orig.apply(this, arguments); if(!_busy) onLocalChange(); return r; };
+  }
+
+  /* ---------- Status/UI ---------- */
+  function setStatus(s){ statusText = s; const el = document.getElementById('rbSyncStatus'); if(el) el.textContent = s; }
+
+  function renderSettings(card){
+    if(!card || document.getElementById('rbSyncBox')) return;
+    const box = document.createElement('div');
+    box.id = 'rbSyncBox';
+    box.style.cssText = 'border-top:1px solid var(--line);padding-top:14px;margin-top:14px';
+    const last = lsGet(K.last);
+    if(!isConnected()){
+      box.innerHTML = '<div class="lbl" style="margin:0 0 8px">☁︎ Cloud-Abgleich (Dropbox)</div>'
+        + '<div class="muted" style="margin:0 0 10px">Gleicht Setlists, Tags, Favoriten, Üben-Liste und Metadaten-Korrekturen automatisch zwischen deinen Geräten ab. Noten-PDFs bleiben lokal.</div>'
+        + '<button class="btn" id="rbSyncConnect" style="width:100%">Mit Dropbox verbinden</button>'
+        + '<div class="muted" id="rbSyncStatus" style="margin:8px 2px 0">'+esc(statusText)+'</div>';
+      card.append(box);
+      const b = document.getElementById('rbSyncConnect'); if(b) b.onclick = startLogin;
+    } else {
+      box.innerHTML = '<div class="lbl" style="margin:0 0 8px">☁︎ Cloud-Abgleich (Dropbox)</div>'
+        + '<div class="muted" style="margin:0 0 10px">Verbunden.'+(last?' Letzter Abgleich: '+esc(stamp(parseInt(last,10))):' Noch nicht abgeglichen.')+'</div>'
+        + '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" id="rbSyncNow" style="flex:1">↻ Jetzt abgleichen</button>'
+        + '<button class="btn ghost" id="rbSyncOff" style="flex:1">Verbindung trennen</button></div>'
+        + '<label style="display:flex;align-items:center;gap:8px;margin:10px 2px 0;font-size:14px;cursor:pointer">'
+        + '<input type="checkbox" id="rbSyncAuto"'+(autoOn()?' checked':'')+'> Automatisch abgleichen</label>'
+        + '<div class="muted" id="rbSyncStatus" style="margin:8px 2px 0">'+esc(statusText)+'</div>';
+      card.append(box);
+      const now_ = document.getElementById('rbSyncNow'); if(now_) now_.onclick = () => syncAll(true);
+      const off = document.getElementById('rbSyncOff'); if(off) off.onclick = () => {
+        if(confirm('Verbindung zu Dropbox trennen? Deine Daten bleiben lokal erhalten.')){
+          [K.ref,K.acc,K.exp,K.ver].forEach(lsDel); renderReplace(card); } };
+      const au = document.getElementById('rbSyncAuto'); if(au) au.onchange = () => { lsSet(K.auto, au.checked?'1':'0'); if(au.checked) syncAll(); };
+    }
+  }
+  function renderReplace(card){ const old=document.getElementById('rbSyncBox'); if(old) old.remove(); renderSettings(card); }
+
+  /* ---------- Init / Redirect-Rücksprung ---------- */
+  function boot(){
+    wrap('save'); wrap('saveOverrides');
+    // openDataSheet umschließen → Abgleich-Bereich im ⚙︎-Menü anhängen
+    if(typeof window.openDataSheet === 'function'){
+      const od = window.openDataSheet;
+      window.openDataSheet = function(){ const r = od.apply(this, arguments); try { renderSettings(document.getElementById('sheetCard')); } catch(e){} return r; };
+      // ⚙︎-Knopf hält eine direkte Referenz auf die Originalfunktion → neu auf die umschlossene zeigen
+      const sb = document.getElementById('settingsBtn'); if(sb) sb.onclick = window.openDataSheet;
+    }
+    // Foreground → leiser Abgleich (max. alle 15 s)
+    document.addEventListener('visibilitychange', () => { if(!document.hidden) maybeAuto(); });
+    window.addEventListener('focus', maybeAuto);
+
+    const q = location.search;
+    if(q.indexOf('code=') >= 0){
+      const code = new URLSearchParams(q).get('code');
+      history.replaceState({}, '', REDIRECT);
+      setStatus('Verbinde…');
+      exchangeCode(code).then(() => { setStatus('Verbunden.'); return syncAll(); })
+        .catch(e => setStatus('⚠ '+(e && e.message ? e.message : e)));
+    } else if(q.indexOf('error=') >= 0){
+      const err = new URLSearchParams(q).get('error_description') || new URLSearchParams(q).get('error');
+      history.replaceState({}, '', REDIRECT);
+      setStatus('⚠ Dropbox: '+err+' (ist die Adresse '+REDIRECT+' als Redirect-URI eingetragen?)');
+    } else if(isConnected() && autoOn()){
+      syncAll();
+    }
+  }
+  function maybeAuto(){ if(isConnected() && autoOn() && now()-_lastAuto > 15000){ _lastAuto = now(); syncAll(); } }
+
+  window.RBSync = { renderSettings, syncAll, isConnected, startLogin, _boot:boot };
+  if(document.readyState === 'loading') window.addEventListener('DOMContentLoaded', boot); else setTimeout(boot, 0);
+})();
+
 </script>
 </body>
 </html>
