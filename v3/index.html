@@ -1874,7 +1874,7 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-21 · Stimmen & Audio';
+const APP_BUILD='2026-07-21 · Stimmen & Audio 2';
 (function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
@@ -2282,9 +2282,10 @@ loadLibrary().then(render).catch(()=>{});
     #voiceAudio .vax{flex:0 0 auto;color:#9aa7b4;cursor:pointer;font-size:20px;padding:0 6px}
     .partsSec{border-top:1px solid var(--line);padding-top:14px;margin-top:16px}
     .partsSec .prow{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)}
-    .partsSec .prole{font-weight:600;flex:0 0 auto}
+    .partsSec .pkind{flex:0 0 auto;color:var(--sub);font-size:15px}
+    .partsSec .prole-sel{flex:0 0 auto}
     .partsSec .pfile{color:var(--sub);font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .partsSec .pdel{color:#ff6b6b;cursor:pointer;padding:2px 6px}
+    .partsSec .pdel{color:#ff6b6b;cursor:pointer;padding:2px 6px;flex:0 0 auto}
     .partsSec select,.partsSec .btn{font-size:14px}`;
     document.head.appendChild(s);
   }
@@ -2368,33 +2369,52 @@ loadLibrary().then(render).catch(()=>{});
     card.append(sec);
     renderSec(sec, t);
   }
+  function refreshAfter(t){ try{ render(); }catch(e){}
+    const v=document.getElementById('viewer');
+    if(v && v.classList.contains('open') && typeof CURRENT!=='undefined' && CURRENT && CURRENT.key===t.key) refreshVoiceBar(t); }
+
+  function roleSelectHTML(p){
+    const rs=roles(); const cur=p.role||'';
+    const list=rs.slice(); if(cur && list.indexOf(cur)<0) list.unshift(cur);
+    return '<select class="txt prole-sel" style="flex:0 0 auto;width:auto;max-width:44%">'
+      + list.map(r=>'<option'+(r===cur?' selected':'')+'>'+esc(r)+'</option>').join('')
+      + '<option value="__other__">＋ Andere…</option></select>';
+  }
+
   function renderSec(sec, t){
     const ps=partsOf(t.key);
     let html='<div class="lbl" style="margin:0 0 6px">🎼 Stimmen &amp; Audio</div>'
-      +'<div class="muted" style="margin:0 0 8px">Weitere Stimmen (PDF) oder ein Arrangement-MP3 zu diesem Stück. Bleiben auf diesem Gerät.</div>';
+      +'<div class="muted" style="margin:0 0 8px">Lade PDF-Stimmen oder ein MP3 hoch — die Rolle ordnest du danach je Zeile zu (oder „Andere…" für einen eigenen Namen). Die Dateien bleiben auf diesem Gerät.</div>';
     if(ps.length){ html+='<div id="pList">'+ps.map(p=>
-      '<div class="prow" data-id="'+p.id+'"><span class="prole">'+esc(p.role)+'</span>'
-      +'<span class="pfile">'+(p.kind==='audio'?'♪ ':'')+esc(p.fileName||'')+'</span>'
+      '<div class="prow" data-id="'+p.id+'"><span class="pkind">'+(p.kind==='audio'?'♪':'📄')+'</span>'
+      + roleSelectHTML(p)
+      +'<span class="pfile">'+esc(p.fileName||'')+'</span>'
       +'<span class="pdel" title="Entfernen">🗑</span></div>').join('')+'</div>'; }
-    html+='<div class="row" style="gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap">'
-      +'<select id="pRole" class="txt" style="flex:0 0 auto;width:auto">'+roles().map(r=>'<option>'+esc(r)+'</option>').join('')+'</select>'
-      +'<button class="btn" id="pAdd" style="flex:1">＋ Datei hinzufügen</button>'
-      +'<input type="file" id="pFile" accept="application/pdf,audio/*,.pdf,.mp3,.m4a,.wav" style="display:none">'
-      +'</div>';
+    html+='<button class="btn" id="pAdd" style="width:100%;margin-top:10px">＋ Datei(en) hochladen</button>'
+      +'<input type="file" id="pFile" accept="application/pdf,audio/*,.pdf,.mp3,.m4a,.wav" multiple style="display:none">';
     sec.innerHTML=html;
+    // Rolle je Zeile ändern
+    sec.querySelectorAll('.prole-sel').forEach(sel=>{ sel.onchange=()=>{
+      const id=sel.closest('.prow').dataset.id; const p=partsOf(t.key).find(x=>x.id===id); if(!p) return;
+      let val=sel.value;
+      if(val==='__other__'){ const c=prompt('Eigene Bezeichnung für diese Stimme:', p.role||''); if(c==null){ renderSec(sec,t); return; } val=(c.trim()||p.role||'Stimme'); }
+      partPut({ id:p.id, tuneKey:p.tuneKey, role:val, kind:p.kind, fileName:p.fileName, addedAt:p.addedAt, blob:p.blob })
+        .then(loadParts).then(()=>{ renderSec(sec,t); refreshAfter(t); });
+    }; });
+    // löschen
     sec.querySelectorAll('.pdel').forEach(x=>x.onclick=()=>{ const id=x.closest('.prow').dataset.id;
-      partDel(id).then(loadParts).then(()=>{ renderSec(sec,t); try{ render(); }catch(e){} if(document.getElementById('viewer').classList.contains('open')&&CURRENT&&CURRENT.key===t.key) refreshVoiceBar(t); }); });
-    const file=sec.querySelector('#pFile'), roleSel=sec.querySelector('#pRole');
+      partDel(id).then(loadParts).then(()=>{ renderSec(sec,t); refreshAfter(t); }); });
+    // hochladen: erst Datei(en), Rolle danach änderbar
+    const file=sec.querySelector('#pFile');
     sec.querySelector('#pAdd').onclick=()=>file.click();
-    file.onchange=()=>{ const f=file.files&&file.files[0]; if(!f) return;
-      const isAudio=AUDIO_RX.test(f.name)|| (f.type||'').indexOf('audio')===0;
-      const role=isAudio?'Audio':roleSel.value;
-      const rec={ id:uid(), tuneKey:t.key, role, kind:isAudio?'audio':'pdf', fileName:f.name, addedAt:Date.now(), blob:f };
+    file.onchange=()=>{ const files=Array.prototype.slice.call(file.files||[]); if(!files.length) return;
       sec.querySelector('#pAdd').textContent='Speichere…';
-      partPut(rec).then(loadParts).then(()=>{ renderSec(sec,t); try{ render(); }catch(e){}
-        if(document.getElementById('viewer').classList.contains('open')&&CURRENT&&CURRENT.key===t.key) refreshVoiceBar(t); }); };
-    // Rolle aus Dateinamen vorschlagen, sobald gewählt (vor dem Ablegen nicht möglich — daher beim Klick)
-    file.addEventListener('click',()=>{ /* noop */});
+      (async()=>{ for(const f of files){
+          const isAudio=AUDIO_RX.test(f.name)||(f.type||'').indexOf('audio')===0;
+          const role=isAudio?'Audio':guessRole(f.name);
+          await partPut({ id:uid(), tuneKey:t.key, role, kind:isAudio?'audio':'pdf', fileName:f.name, addedAt:Date.now(), blob:f });
+        } await loadParts(); renderSec(sec,t); refreshAfter(t);
+      })().catch(()=>{ renderSec(sec,t); }); };
   }
 
   /* ---- Hooks setzen ---- */
