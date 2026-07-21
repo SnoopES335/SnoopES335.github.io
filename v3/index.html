@@ -1874,7 +1874,7 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-21 · Stimmen & Audio 2';
+const APP_BUILD='2026-07-21 · Stimmen & Audio 3';
 (function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
@@ -2285,6 +2285,7 @@ loadLibrary().then(render).catch(()=>{});
     .partsSec .pkind{flex:0 0 auto;color:var(--sub);font-size:15px}
     .partsSec .prole-sel{flex:0 0 auto}
     .partsSec .pfile{color:var(--sub);font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .partsSec .pdetach{color:#5aa9ff;cursor:pointer;padding:2px 6px;flex:0 0 auto;font-size:16px}
     .partsSec .pdel{color:#ff6b6b;cursor:pointer;padding:2px 6px;flex:0 0 auto}
     .partsSec select,.partsSec .btn{font-size:14px}`;
     document.head.appendChild(s);
@@ -2295,16 +2296,30 @@ loadLibrary().then(render).catch(()=>{});
     let ov=document.getElementById('voiceOverlay');
     if(ov) return ov;
     ov=document.createElement('div'); ov.id='voiceOverlay';
-    ov.innerHTML='<div class="vohead"><button class="btn ghost" id="voClose">‹ Zurück</button><b id="voTitle"></b></div><div class="vobody" id="voBody"></div>';
+    ov.innerHTML='<div class="vohead"><button class="btn ghost" id="voClose">‹ Zurück</button><b id="voTitle"></b><span style="flex:1"></span><button class="btn ghost" id="voDetach" title="Als eigenes Stück nach „Sonstiges Material" lösen">⇱ Trennen</button></div><div class="vobody" id="voBody"></div>';
     document.body.appendChild(ov);
     ov.querySelector('#voClose').onclick=closeOverlay;
     return ov;
+  }
+  async function detachPart(part, parent){
+    if(!part || !parent) return;
+    if(!confirm('„'+(part.role||'Stimme')+'" vom Stück lösen?\n\nDie Stimme wird NICHT gelöscht — sie erscheint als eigenes Stück unter „Sonstiges Material".')) return;
+    let np=1; if(part.kind==='pdf'){ try{ const doc=await loadPdf(part._url); np=doc.numPages||1; }catch(e){} }
+    const rec={ id:'lib_'+uid(), bid:'user', title:(parent.t||'Stück')+' — '+(part.role||'Stimme'),
+      composer:parent.c||'', addedAt:Date.now(), np, fileName:part.fileName||'', blob:part.blob };
+    try{ await libPut(rec); }catch(e){ alert('Konnte die Stimme nicht ablegen: '+(e&&e.message||e)); return; }
+    await partDel(part.id);
+    await loadParts(); if(typeof loadLibrary==='function'){ try{ await loadLibrary(); }catch(e){} }
+    closeOverlay(); try{ render(); }catch(e){}
+    const v=document.getElementById('viewer'); if(v&&v.classList.contains('open')&&typeof CURRENT!=='undefined'&&CURRENT) refreshVoiceBar(CURRENT);
   }
   function closeOverlay(){ const ov=document.getElementById('voiceOverlay'); if(ov){ ov.classList.remove('open'); ov.querySelector('#voBody').innerHTML=''; } setActiveChip(null); }
   async function showPdf(part){
     injectCSS(); const ov=ensureOverlay(); ov.querySelector('#voTitle').textContent=part.role+(part.fileName?' · '+part.fileName:'');
     const body=ov.querySelector('#voBody'); body.innerHTML='<div style="color:#e6eef6;margin-top:40px">Lädt…</div>';
     ov.classList.add('open');
+    const parent = (typeof CURRENT!=='undefined') ? CURRENT : null;
+    const det=ov.querySelector('#voDetach'); if(det){ det.style.display='flex'; det.onclick=()=>detachPart(part, parent); }
     try{
       const doc=await loadPdf(part._url); const n=doc.numPages;
       body.innerHTML='';
@@ -2389,7 +2404,8 @@ loadLibrary().then(render).catch(()=>{});
       '<div class="prow" data-id="'+p.id+'"><span class="pkind">'+(p.kind==='audio'?'♪':'📄')+'</span>'
       + roleSelectHTML(p)
       +'<span class="pfile">'+esc(p.fileName||'')+'</span>'
-      +'<span class="pdel" title="Entfernen">🗑</span></div>').join('')+'</div>'; }
+      +(p.kind==='pdf'?'<span class="pdetach" title="Vom Stück lösen → Sonstiges Material">⇱</span>':'')
+      +'<span class="pdel" title="Ganz entfernen (Datei löschen)">🗑</span></div>').join('')+'</div>'; }
     html+='<button class="btn" id="pAdd" style="width:100%;margin-top:10px">＋ Datei(en) hochladen</button>'
       +'<input type="file" id="pFile" accept="application/pdf,audio/*,.pdf,.mp3,.m4a,.wav" multiple style="display:none">';
     sec.innerHTML=html;
@@ -2401,8 +2417,12 @@ loadLibrary().then(render).catch(()=>{});
       partPut({ id:p.id, tuneKey:p.tuneKey, role:val, kind:p.kind, fileName:p.fileName, addedAt:p.addedAt, blob:p.blob })
         .then(loadParts).then(()=>{ renderSec(sec,t); refreshAfter(t); });
     }; });
-    // löschen
+    // vom Stück lösen → als eigenes Stück nach „Sonstiges Material"
+    sec.querySelectorAll('.pdetach').forEach(x=>x.onclick=()=>{ const id=x.closest('.prow').dataset.id;
+      const p=partsOf(t.key).find(y=>y.id===id); if(p) detachPart(p, t).then(()=>renderSec(sec,t)); });
+    // ganz löschen (mit Rückfrage)
     sec.querySelectorAll('.pdel').forEach(x=>x.onclick=()=>{ const id=x.closest('.prow').dataset.id;
+      if(!confirm('Diese Stimme ganz entfernen? Die Datei wird gelöscht.')) return;
       partDel(id).then(loadParts).then(()=>{ renderSec(sec,t); refreshAfter(t); }); });
     // hochladen: erst Datei(en), Rolle danach änderbar
     const file=sec.querySelector('#pFile');
