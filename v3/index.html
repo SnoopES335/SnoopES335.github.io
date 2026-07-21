@@ -564,7 +564,7 @@ function tuneRow(t){
   li.innerHTML=`
     <div class="main">
       <div class="title">${esc(t.t)}</div>
-      <div class="meta">${metaHTML}</div>
+      <div class="meta">${metaHTML}${window.voiceBadges?window.voiceBadges(t):''}</div>
       ${pillsHTML}
     </div>
     <div class="iconbtn" data-a="meta" title="Titel & Komponist bearbeiten">✎</div>
@@ -1660,10 +1660,11 @@ let _rz; window.addEventListener('resize',()=>{ clearTimeout(_rz); _rz=setTimeou
 
 /* ---- IndexedDB: annotated page images ('pages') + eigene importierte PDFs ('libtunes') ---- */
 const IDB_DB='realbook', IDB_ST='pages', IDB_LIB='libtunes';
-function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open(IDB_DB,2);
+function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open(IDB_DB,3);
   r.onupgradeneeded=()=>{ const db=r.result;
     if(!db.objectStoreNames.contains(IDB_ST)) db.createObjectStore(IDB_ST,{keyPath:'id'});
-    if(!db.objectStoreNames.contains(IDB_LIB)) db.createObjectStore(IDB_LIB,{keyPath:'id'}); };
+    if(!db.objectStoreNames.contains(IDB_LIB)) db.createObjectStore(IDB_LIB,{keyPath:'id'});
+    if(!db.objectStoreNames.contains('parts')){ const ps=db.createObjectStore('parts',{keyPath:'id'}); try{ ps.createIndex('tuneKey','tuneKey',{unique:false}); }catch(e){} } };
   r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
 /* Bibliothek: ein Datensatz je Stück = {id,bid,title,composer,addedAt,np,fileName,blob} */
 async function libAll(){ const db=await idb(); return new Promise((res,rej)=>{ const tx=db.transaction(IDB_LIB,'readonly'),st=tx.objectStore(IDB_LIB),out=[],c=st.openCursor();
@@ -1873,7 +1874,7 @@ if(location.protocol==='file:'){
   document.body.appendChild(d);
 }
 /* Build-Kennung: sichtbar im Notiz-Editor, damit sofort erkennbar ist, WELCHER Stand geladen ist. */
-const APP_BUILD='2026-07-21 · Cloud-Abgleich';
+const APP_BUILD='2026-07-21 · Stimmen & Audio';
 (function(){ const b=document.getElementById('eBuild'); if(b){ b.textContent='Build '+APP_BUILD; b.style.cursor='pointer'; b.title='Tippen: Diagnose-Overlay an/aus'; b.onclick=diagToggle; } })();
 
 /* register service worker (offline / installable) + Auto-Update:
@@ -2208,6 +2209,214 @@ loadLibrary().then(render).catch(()=>{});
 
   window.RBSync = { renderSettings, syncAll, isConnected, startLogin, _boot:boot };
   if(document.readyState === 'loading') window.addEventListener('DOMContentLoaded', boot); else setTimeout(boot, 0);
+})();
+
+
+/* ============================================================================
+   Phase 2 — Baustein „Stimmen & Audio": ein Stück = Bündel aus Dateien mit Rollen.
+   Isoliert: neuer IndexedDB-Store 'parts', eigenes Betrachter-Overlay + Audio-Leiste.
+   Gilt für ALLE Stücke (Großsammlung + eigene Importe), Schlüssel = t.key.
+   Rührt den bestehenden Betrachter/CSS nicht an (nur additive Hooks: voiceBadges,
+   umschlossenes openViewer/openMetaSheet). Dateien bleiben gerätelokal (kein Auto-Abgleich).
+   ========================================================================== */
+(function(){
+  "use strict";
+  const ROLE_KEY='rb_roles';
+  const DEF_ROLES=['Leadsheet','Piano','Bass','Gitarre','Alt-Sax','Tenor-Sax','Trompete','Posaune','Audio'];
+  const AUDIO_RX=/\.(mp3|m4a|aac|wav|ogg|opus)$/i;
+  const SHORT={ 'Leadsheet':'LS','Piano':'Pno','Bass':'Bass','Gitarre':'Git','Alt-Sax':'ASax',
+    'Tenor-Sax':'TSax','Trompete':'Tpt','Posaune':'Pos','Audio':'♪','Gesang':'Voc','Vocals':'Voc','Schlagzeug':'Dr' };
+  const shortOf = r => SHORT[r] || (r||'').slice(0,4);
+  const uid = () => 'p_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+  const roles = () => { try{ const r=JSON.parse(localStorage.getItem(ROLE_KEY)); if(Array.isArray(r)&&r.length) return r; }catch(e){} return DEF_ROLES.slice(); };
+
+  /* ---- IndexedDB 'parts' (Store wird in idb() v3 angelegt) ---- */
+  function tx(mode){ return idb().then(db=>{ try{ return db.transaction('parts',mode).objectStore('parts'); }catch(e){ return null; } }); }
+  function partsAll(){ return idb().then(db=>new Promise((res,rej)=>{
+    let t; try{ t=db.transaction('parts','readonly'); }catch(e){ return res([]); }
+    const st=t.objectStore('parts'), out=[], c=st.openCursor();
+    c.onsuccess=e=>{ const cur=e.target.result; if(cur){ out.push(cur.value); cur.continue(); } else res(out); }; c.onerror=()=>rej(c.error); })); }
+  function partPut(rec){ return idb().then(db=>new Promise((res,rej)=>{ const t=db.transaction('parts','readwrite'); t.objectStore('parts').put(rec); t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); })); }
+  function partDel(id){ return idb().then(db=>new Promise((res,rej)=>{ const t=db.transaction('parts','readwrite'); t.objectStore('parts').delete(id); t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); })); }
+
+  let PARTS={}; window.PARTS=PARTS;
+  function loadParts(){ return partsAll().then(list=>{
+    Object.values(PARTS).forEach(arr=>arr.forEach(p=>{ if(p._url) try{ URL.revokeObjectURL(p._url); }catch(_){}}));
+    const map={};
+    list.forEach(p=>{ try{ p._url=URL.createObjectURL(p.blob); }catch(_){ p._url=''; } (map[p.tuneKey]=map[p.tuneKey]||[]).push(p); });
+    Object.values(map).forEach(arr=>arr.sort((a,b)=>(a.addedAt||0)-(b.addedAt||0)));
+    PARTS=map; window.PARTS=map;
+  }).catch(()=>{}); }
+  const partsOf = key => PARTS[key]||[];
+
+  /* ---- Badges in der Listenzeile (Hook aus tuneRow) ---- */
+  window.voiceBadges=function(t){
+    const ps = t && t.key ? partsOf(t.key) : [];
+    if(!ps.length) return '';
+    return '<span class="vbadges">'+ps.map(p=>'<span class="vbadge'+(p.kind==='audio'?' aud':'')+'">'+esc(shortOf(p.role))+'</span>').join('')+'</span>';
+  };
+
+  /* ---- CSS additiv einspielen ---- */
+  function injectCSS(){
+    if(document.getElementById('partsCSS')) return;
+    const s=document.createElement('style'); s.id='partsCSS';
+    s.textContent=`
+    .vbadges{display:inline-flex;gap:4px;margin-left:2px;vertical-align:middle}
+    .vbadge{font-size:11px;font-weight:700;padding:1px 5px;border-radius:6px;background:#26313c;color:#9fd0ff;border:1px solid #37485a}
+    .vbadge.aud{color:#ffd27a;border-color:#5a4a2a;background:#33291a}
+    #voiceBar{display:flex;gap:6px;align-items:center;padding:8px 12px;background:#0d1319;border-bottom:1px solid var(--line);overflow-x:auto}
+    #voiceBar .vlbl{color:var(--sub);font-size:12px;margin-right:2px;flex:0 0 auto}
+    #voiceBar .vc{flex:0 0 auto;font-size:13px;font-weight:600;padding:6px 12px;border-radius:999px;background:#1b2129;color:#cdd6df;border:1px solid #2b333d;cursor:pointer;white-space:nowrap}
+    #voiceBar .vc.on{background:#0a5cff;color:#fff;border-color:#0a5cff}
+    #voiceBar .vc.aud.on{background:#c58a2a;border-color:#c58a2a}
+    #voiceOverlay{position:fixed;inset:0;z-index:130;background:#0b0f13;display:none;flex-direction:column}
+    #voiceOverlay.open{display:flex}
+    #voiceOverlay .vohead{display:flex;align-items:center;gap:10px;padding:10px 14px;color:#eef2f6;background:#111922;border-bottom:1px solid #22303a}
+    #voiceOverlay .vohead b{font-size:16px}
+    #voiceOverlay .vobody{flex:1;overflow:auto;text-align:center;padding:10px;background:#0b0f13}
+    #voiceOverlay canvas{max-width:100%;display:block;margin:0 auto 10px;background:#fff;border-radius:4px;box-shadow:0 2px 10px rgba(0,0,0,.5)}
+    #voiceAudio{position:fixed;left:0;right:0;bottom:0;z-index:125;background:#141b22;border-top:1px solid #2b333d;padding:8px 12px 12px;display:none;align-items:center;gap:10px}
+    #voiceAudio.open{display:flex}
+    #voiceAudio .vaname{color:#ffd27a;font-size:13px;font-weight:600;flex:0 0 auto;max-width:30%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #voiceAudio audio{flex:1;height:36px}
+    #voiceAudio .vax{flex:0 0 auto;color:#9aa7b4;cursor:pointer;font-size:20px;padding:0 6px}
+    .partsSec{border-top:1px solid var(--line);padding-top:14px;margin-top:16px}
+    .partsSec .prow{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+    .partsSec .prole{font-weight:600;flex:0 0 auto}
+    .partsSec .pfile{color:var(--sub);font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .partsSec .pdel{color:#ff6b6b;cursor:pointer;padding:2px 6px}
+    .partsSec select,.partsSec .btn{font-size:14px}`;
+    document.head.appendChild(s);
+  }
+
+  /* ---- Betrachter-Overlay (PDF-Stimme) ---- */
+  function ensureOverlay(){
+    let ov=document.getElementById('voiceOverlay');
+    if(ov) return ov;
+    ov=document.createElement('div'); ov.id='voiceOverlay';
+    ov.innerHTML='<div class="vohead"><button class="btn ghost" id="voClose">‹ Zurück</button><b id="voTitle"></b></div><div class="vobody" id="voBody"></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#voClose').onclick=closeOverlay;
+    return ov;
+  }
+  function closeOverlay(){ const ov=document.getElementById('voiceOverlay'); if(ov){ ov.classList.remove('open'); ov.querySelector('#voBody').innerHTML=''; } setActiveChip(null); }
+  async function showPdf(part){
+    injectCSS(); const ov=ensureOverlay(); ov.querySelector('#voTitle').textContent=part.role+(part.fileName?' · '+part.fileName:'');
+    const body=ov.querySelector('#voBody'); body.innerHTML='<div style="color:#e6eef6;margin-top:40px">Lädt…</div>';
+    ov.classList.add('open');
+    try{
+      const doc=await loadPdf(part._url); const n=doc.numPages;
+      body.innerHTML='';
+      const W=Math.min(window.innerWidth,1100)-24; const dpr=Math.min(window.devicePixelRatio||1,2);
+      for(let i=1;i<=n;i++){ const page=await doc.getPage(i); const v1=page.getViewport({scale:1});
+        const scale=W/v1.width; const vp=page.getViewport({scale:scale*dpr});
+        const cvs=document.createElement('canvas'); cvs.width=Math.round(vp.width); cvs.height=Math.round(vp.height);
+        cvs.style.width=(vp.width/dpr)+'px'; cvs.style.height=(vp.height/dpr)+'px';
+        body.append(cvs); await page.render({canvasContext:cvs.getContext('2d'),viewport:vp}).promise; }
+    }catch(e){ body.innerHTML='<div style="color:#ff9a9a;margin-top:40px">Konnte diese Stimme nicht anzeigen.</div>'; }
+  }
+
+  /* ---- Audio-Leiste ---- */
+  function ensureAudio(){
+    let a=document.getElementById('voiceAudio'); if(a) return a;
+    a=document.createElement('div'); a.id='voiceAudio';
+    a.innerHTML='<span class="vaname" id="vaName"></span><audio id="vaEl" controls preload="metadata"></audio><span class="vax" id="vaX" title="Schließen">✕</span>';
+    document.body.appendChild(a);
+    a.querySelector('#vaX').onclick=closeAudio;
+    return a;
+  }
+  function closeAudio(){ const a=document.getElementById('voiceAudio'); if(a){ const el=a.querySelector('#vaEl'); try{ el.pause(); }catch(_){} a.classList.remove('open'); } setActiveChip(null); }
+  function showAudio(part){
+    injectCSS(); const a=ensureAudio(); a.querySelector('#vaName').textContent=part.fileName||part.role;
+    const el=a.querySelector('#vaEl'); el.src=part._url; a.classList.add('open'); try{ el.play().catch(()=>{}); }catch(_){}
+  }
+
+  /* ---- Stimmen-Leiste im Betrachter ---- */
+  function setActiveChip(id){
+    const bar=document.getElementById('voiceBar'); if(!bar) return;
+    bar.querySelectorAll('.vc').forEach(c=>c.classList.toggle('on', c.dataset.id===(id||'orig')));
+  }
+  function refreshVoiceBar(t){
+    injectCSS();
+    const viewer=document.getElementById('viewer'); if(!viewer) return;
+    let bar=document.getElementById('voiceBar');
+    const ps = t && t.key ? partsOf(t.key) : [];
+    if(!ps.length){ if(bar) bar.remove(); return; }
+    if(!bar){ bar=document.createElement('div'); bar.id='voiceBar';
+      const vbar=viewer.querySelector('.vbar'); vbar.insertAdjacentElement('afterend', bar); }
+    bar.innerHTML='';
+    const lbl=document.createElement('span'); lbl.className='vlbl'; lbl.textContent='Stimmen:'; bar.append(lbl);
+    // Originalstimme (das eingebaute PDF/die Notiz)
+    const orig=document.createElement('button'); orig.className='vc on'; orig.dataset.id='orig';
+    orig.textContent = t.isEdit ? 'Notiz' : (t.isLib ? 'Original' : 'Leadsheet');
+    orig.onclick=()=>{ closeOverlay(); closeAudio(); setActiveChip(null); }; bar.append(orig);
+    ps.forEach(p=>{ const c=document.createElement('button'); c.className='vc'+(p.kind==='audio'?' aud':''); c.dataset.id=p.id;
+      c.textContent=(p.kind==='audio'?'♪ ':'')+p.role;
+      c.onclick=()=>{ if(p.kind==='audio'){ closeOverlay(); showAudio(p); } else { closeAudio(); showPdf(p); } setActiveChip(p.id); };
+      bar.append(c); });
+  }
+
+  /* ---- Verwaltung im Bearbeiten-Menü ---- */
+  function guessRole(name){ const n=(name||'').toLowerCase();
+    for(const r of roles()){ if(r==='Audio') continue; if(n.includes(r.toLowerCase().replace('-',''))||n.includes(r.toLowerCase())) return r; }
+    return 'Leadsheet'; }
+  function appendPartsUI(card, t){
+    if(!card || !t || t.isEdit) return;                 // Notizen ausgenommen
+    if(card.querySelector('.partsSec')) return;
+    injectCSS();
+    const sec=document.createElement('div'); sec.className='partsSec';
+    card.append(sec);
+    renderSec(sec, t);
+  }
+  function renderSec(sec, t){
+    const ps=partsOf(t.key);
+    let html='<div class="lbl" style="margin:0 0 6px">🎼 Stimmen &amp; Audio</div>'
+      +'<div class="muted" style="margin:0 0 8px">Weitere Stimmen (PDF) oder ein Arrangement-MP3 zu diesem Stück. Bleiben auf diesem Gerät.</div>';
+    if(ps.length){ html+='<div id="pList">'+ps.map(p=>
+      '<div class="prow" data-id="'+p.id+'"><span class="prole">'+esc(p.role)+'</span>'
+      +'<span class="pfile">'+(p.kind==='audio'?'♪ ':'')+esc(p.fileName||'')+'</span>'
+      +'<span class="pdel" title="Entfernen">🗑</span></div>').join('')+'</div>'; }
+    html+='<div class="row" style="gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap">'
+      +'<select id="pRole" class="txt" style="flex:0 0 auto;width:auto">'+roles().map(r=>'<option>'+esc(r)+'</option>').join('')+'</select>'
+      +'<button class="btn" id="pAdd" style="flex:1">＋ Datei hinzufügen</button>'
+      +'<input type="file" id="pFile" accept="application/pdf,audio/*,.pdf,.mp3,.m4a,.wav" style="display:none">'
+      +'</div>';
+    sec.innerHTML=html;
+    sec.querySelectorAll('.pdel').forEach(x=>x.onclick=()=>{ const id=x.closest('.prow').dataset.id;
+      partDel(id).then(loadParts).then(()=>{ renderSec(sec,t); try{ render(); }catch(e){} if(document.getElementById('viewer').classList.contains('open')&&CURRENT&&CURRENT.key===t.key) refreshVoiceBar(t); }); });
+    const file=sec.querySelector('#pFile'), roleSel=sec.querySelector('#pRole');
+    sec.querySelector('#pAdd').onclick=()=>file.click();
+    file.onchange=()=>{ const f=file.files&&file.files[0]; if(!f) return;
+      const isAudio=AUDIO_RX.test(f.name)|| (f.type||'').indexOf('audio')===0;
+      const role=isAudio?'Audio':roleSel.value;
+      const rec={ id:uid(), tuneKey:t.key, role, kind:isAudio?'audio':'pdf', fileName:f.name, addedAt:Date.now(), blob:f };
+      sec.querySelector('#pAdd').textContent='Speichere…';
+      partPut(rec).then(loadParts).then(()=>{ renderSec(sec,t); try{ render(); }catch(e){}
+        if(document.getElementById('viewer').classList.contains('open')&&CURRENT&&CURRENT.key===t.key) refreshVoiceBar(t); }); };
+    // Rolle aus Dateinamen vorschlagen, sobald gewählt (vor dem Ablegen nicht möglich — daher beim Klick)
+    file.addEventListener('click',()=>{ /* noop */});
+  }
+
+  /* ---- Hooks setzen ---- */
+  function boot(){
+    injectCSS();
+    // openMetaSheet umschließen → Stimmen-Verwaltung anhängen
+    if(typeof window.openMetaSheet==='function'){
+      const om=window.openMetaSheet;
+      window.openMetaSheet=function(t){ const r=om.apply(this,arguments); try{ appendPartsUI(document.getElementById('sheetCard'), t); }catch(e){} return r; };
+    }
+    // openViewer umschließen → Stimmen-Leiste aufbauen (Overlay/Audio zurücksetzen)
+    if(typeof window.openViewer==='function'){
+      const ov=window.openViewer;
+      window.openViewer=function(t){ const r=ov.apply(this,arguments); try{ closeOverlay(); const a=document.getElementById('voiceAudio'); if(a) a.classList.remove('open'); refreshVoiceBar(t); }catch(e){} return r; };
+    }
+    // Betrachter schließen → Overlay/Audio mit schließen
+    const vc=document.getElementById('vClose'); if(vc) vc.addEventListener('click',()=>{ closeOverlay(); closeAudio(); });
+    // Parts laden und Liste auffrischen
+    loadParts().then(()=>{ try{ render(); }catch(e){} });
+  }
+  window.RBParts={ loadParts, refreshVoiceBar, partsOf, _boot:boot };
+  if(document.readyState==='loading') window.addEventListener('DOMContentLoaded',boot); else setTimeout(boot,0);
 })();
 
 </script>
